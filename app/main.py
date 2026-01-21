@@ -11,7 +11,7 @@ from fastapi.responses import JSONResponse
 
 from app.core.config import settings
 from app.core.database import init_db
-from app.api.routes import predictions, players, data, odds, nfl
+from app.api.routes import predictions, players, data, odds, nfl, accuracy
 
 # Configure logging
 logging.basicConfig(
@@ -59,6 +59,7 @@ app.include_router(players.router)
 app.include_router(data.router)
 app.include_router(odds.router)
 app.include_router(nfl.router)
+app.include_router(accuracy.router)
 
 
 @app.get("/")
@@ -73,6 +74,7 @@ async def root():
             "players": "/api/players",
             "data": "/api/data",
             "odds": "/api/odds",
+            "accuracy": "/api/accuracy",
             "docs": "/docs",
             "health": "/health"
         }
@@ -117,7 +119,8 @@ async def api_health():
                 "predictions": "/api/predictions",
                 "players": "/api/players",
                 "data": "/api/data",
-                "odds": "/api/odds"
+                "odds": "/api/odds",
+                "accuracy": "/api/accuracy"
             }
         }
     except Exception as e:

@@ -24,6 +24,7 @@ from app.models.models import Game, Prediction, Player
 from app.services.prediction_service import PredictionService
 from app.services.odds_api_service import OddsApiService
 from app.services.odds_mapper import OddsMapper
+from app.services.boxscore_import_service import BoxscoreImportService
 
 # Setup logging
 logging.basicConfig(
@@ -53,6 +54,8 @@ class DailyOddsFetchService:
     def __init__(self):
         self.db = SessionLocal()
         self.stats = {
+            "games_resolved": 0,
+            "predictions_resolved": 0,
             "games_fetched": 0,
             "predictions_generated": 0,
             "odds_updated": 0,
@@ -65,6 +68,9 @@ class DailyOddsFetchService:
         logger.info("=" * 60)
         logger.info("Starting Daily Odds Fetch Service")
         logger.info("=" * 60)
+
+        # Step 0: Resolve predictions from completed games
+        await self._resolve_completed_games()
 
         # Step 1: Fetch upcoming games from The Odds API
         await self._fetch_upcoming_games()
@@ -130,6 +136,33 @@ class DailyOddsFetchService:
         except Exception as e:
             logger.error(f"Error fetching upcoming games: {e}")
             self.stats["errors"].append(f"Fetch games: {str(e)}")
+
+    async def _resolve_completed_games(self):
+        """Resolve predictions from completed games (last 48 hours)."""
+        logger.info("\n[Step 0] Resolving completed games...")
+
+        try:
+            service = BoxscoreImportService(self.db)
+            result = await service.resolve_predictions_for_completed_games(hours_back=48)
+
+            self.stats["games_resolved"] = result["games_processed"]
+            self.stats["predictions_resolved"] = result["predictions_resolved"]
+
+            logger.info(f"Resolved: {result['games_processed']} games, "
+                       f"{result['predictions_resolved']} predictions")
+
+            if result["player_stats_created"] > 0:
+                logger.info(f"Created: {result['player_stats_created']} PlayerStats records")
+            if result["player_stats_updated"] > 0:
+                logger.info(f"Updated: {result['player_stats_updated']} PlayerStats records")
+
+            if result["errors"]:
+                logger.warning(f"Errors: {result['errors']}")
+                self.stats["errors"].extend([f"Resolve: {e}" for e in result["errors"]])
+
+        except Exception as e:
+            logger.error(f"Error resolving completed games: {e}")
+            self.stats["errors"].append(f"Resolve: {str(e)}")
 
     async def _generate_predictions(self):
         """Generate predictions for games without them."""
@@ -315,16 +348,18 @@ class DailyOddsFetchService:
         logger.info("\n" + "=" * 60)
         logger.info("Daily Odds Fetch Complete")
         logger.info("=" * 60)
+        logger.info(f"Games resolved: {self.stats['games_resolved']}")
+        logger.info(f"Predictions resolved: {self.stats['predictions_resolved']}")
         logger.info(f"Games fetched: {self.stats['games_fetched']}")
         logger.info(f"Predictions generated: {self.stats['predictions_generated']}")
         logger.info(f"Games checked for props: {self.stats['games_checked_for_props']}")
         logger.info(f"Odds updated: {self.stats['odds_updated']}")
-        
+
         if self.stats['errors']:
             logger.warning(f"Errors: {len(self.stats['errors'])}")
             for error in self.stats['errors'][:5]:  # Show first 5
                 logger.warning(f"  - {error}")
-        
+
         logger.info("=" * 60)
 
 

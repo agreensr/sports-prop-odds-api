@@ -15,7 +15,7 @@ from pydantic import BaseModel
 logger = logging.getLogger(__name__)
 
 try:
-    from nba_api.stats.endpoints import commonallplayers, scoreboardv2
+    from nba_api.stats.endpoints import commonallplayers, scoreboardv2, boxscoretraditionalv2
     NBA_API_AVAILABLE = True
 except ImportError:
     logger.warning("nba_api not installed. Run: pip install nba_api>=1.4.1")
@@ -292,9 +292,91 @@ class NBAService:
             return []
 
     async def get_boxscore(self, game_id: str) -> Dict:
-        """Placeholder for boxscore - returns empty dict."""
-        logger.warning("get_boxscore not yet implemented")
-        return {}
+        """
+        Fetch boxscore data for a completed game.
+
+        Endpoint: boxscoretraditionalv2.BoxScoreTraditionalV2
+        Cost: 1 API call
+        Cache: 24 hours (game results don't change)
+
+        Args:
+            game_id: NBA.com game ID (10-digit string)
+
+        Returns:
+            Dictionary with keys:
+            - GAME_ID: Game ID
+            - PlayerStats: List of player stat dicts with keys:
+                - PLAYER_ID: NBA.com player ID
+                - PTS: Points scored
+                - REB: Rebounds
+                - AST: Assists
+                - FG3M: Three-pointers made
+                - MIN: Minutes played
+        """
+        if not NBA_API_AVAILABLE:
+            logger.error("NBA API not available")
+            return {}
+
+        cache_key = self._get_cache_key("boxscore", game_id=game_id)
+        cached = await self._get_cached(cache_key)
+        if cached:
+            logger.info(f"Using cached boxscore for {game_id}")
+            return cached
+
+        try:
+            # Run blocking call in thread pool
+            loop = asyncio.get_event_loop()
+            boxscore_data = await loop.run_in_executor(
+                None,
+                lambda: boxscoretraditionalv2.BoxScoreTraditionalV2(
+                    game_id=game_id,
+                    league_id="00"
+                ).get_dict()
+            )
+
+            # Extract PlayerStats resultSet
+            result_sets = boxscore_data.get('resultSets', [])
+            player_stats_data = None
+
+            for rs in result_sets:
+                if rs.get('name') == 'PlayerStats':
+                    player_stats_data = rs
+                    break
+
+            if not player_stats_data:
+                logger.warning(f"No PlayerStats found for game {game_id}")
+                return {}
+
+            # Transform to list of dicts
+            headers = player_stats_data.get('headers', [])
+            rows = player_stats_data.get('rowSet', [])
+
+            player_stats = []
+            for row in rows:
+                stat_dict = dict(zip(headers, row))
+                player_stats.append({
+                    'PLAYER_ID': str(stat_dict.get('PLAYER_ID', '')),
+                    'PTS': stat_dict.get('PTS'),
+                    'REB': stat_dict.get('REB'),
+                    'AST': stat_dict.get('AST'),
+                    'FG3M': stat_dict.get('FG3M'),
+                    'MIN': stat_dict.get('MIN')
+                })
+
+            result = {
+                'GAME_ID': game_id,
+                'PlayerStats': player_stats
+            }
+
+            logger.info(f"Fetched boxscore for {game_id}: {len(player_stats)} players")
+
+            # Cache for 24 hours (game results don't change)
+            await self._set_cache(cache_key, result, ttl=86400)
+            return result
+
+        except Exception as e:
+            logger.error(f"Error fetching boxscore for {game_id}: {e}")
+            return {}
 
     async def get_schedule(self, season: str = "2024-25") -> List[Dict]:
         """Placeholder for schedule - returns empty list."""

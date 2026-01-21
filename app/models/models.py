@@ -79,12 +79,20 @@ class Prediction(Base):
     odds_last_updated = Column(DateTime, nullable=True, index=True)  # Last odds update
     created_at = Column(DateTime, nullable=False, index=True)
 
+    # Accuracy tracking fields
+    actual_value = Column(Float, nullable=True)  # Actual stat value from game
+    difference = Column(Float, nullable=True)  # |predicted - actual|
+    was_correct = Column(Boolean, nullable=True)  # Was recommendation correct?
+    actuals_resolved_at = Column(DateTime, nullable=True, index=True)  # When actuals were populated
+
     # Relationships
     player = relationship("Player", back_populates="predictions")
     game = relationship("Game", back_populates="predictions")
 
     __table_args__ = (
         Index('ix_predictions_odds_last_updated', 'odds_last_updated'),
+        Index('ix_predictions_actuals_resolved', 'actuals_resolved_at'),
+        Index('ix_predictions_accuracy_lookup', 'game_id', 'stat_type', 'actuals_resolved_at'),
     )
 
 
