@@ -1,7 +1,11 @@
 #!/bin/bash
 #####################################################################
 # NBA Sports API - Deployment Script
-# Deploys ESPN API integration fixes to remote server
+# Deploys Hybrid API integration (Odds API + Sport APIs)
+#
+# Hybrid Architecture:
+# - The Odds API: Game schedule and betting odds (primary)
+# - Sport APIs (NBA, NFL, etc.): Player statistics
 #####################################################################
 
 set -e  # Exit on error
@@ -90,6 +94,7 @@ deploy_files() {
     scp app/services/nfl_service.py "${REMOTE_USER}@${REMOTE_HOST}:${REMOTE_PATH}/app/services/nfl_service.py"
     scp app/services/odds_api_service.py "${REMOTE_USER}@${REMOTE_HOST}:${REMOTE_PATH}/app/services/odds_api_service.py"
     scp app/services/odds_mapper.py "${REMOTE_USER}@${REMOTE_HOST}:${REMOTE_PATH}/app/services/odds_mapper.py"
+    scp app/services/prediction_service.py "${REMOTE_USER}@${REMOTE_HOST}:${REMOTE_PATH}/app/services/prediction_service.py"
 
     # Copy route files
     log_info "Copying route files..."
@@ -163,21 +168,29 @@ restart_service() {
     log_info "Restarting service..."
 
     ssh "${REMOTE_USER}@${REMOTE_HOST}" << 'EOF'
-        # Try user service first
-        if systemctl --user is-active --quiet sports-api; then
-            systemctl --user restart sports-api
-            echo "User service restarted"
-        # Try system service
-        elif systemctl is-active --quiet sports-api; then
-            systemctl restart sports-api
-            echo "System service restarted"
-        # Not running as service, try manual start
-        else
-            cd /opt/sports-bet-ai-api
-            source venv/bin/activate
-            nohup uvicorn app.main:app --host 0.0.0.0 --port 8001 > /var/log/sports-api.log 2>&1 &
-            echo "Started manually (PID: $!)"
+        # Load environment variables from .env file
+        cd /opt/sports-bet-ai-api
+        if [ -f ".env" ]; then
+            # Export all variables from .env file
+            export $(grep -v '^#' .env | xargs)
+            echo "Loaded environment variables from .env"
         fi
+
+        # Kill any existing uvicorn processes
+        pkill -9 -f "uvicorn app.main:app" 2>/dev/null || true
+        sleep 2
+
+        # Start service with environment variables
+        source venv/bin/activate
+
+        # Ensure THE_ODDS_API_KEY is set
+        if [ -z "$THE_ODDS_API_KEY" ] && [ -f ".env" ]; then
+            export THE_ODDS_API_KEY=$(grep THE_ODDS_API_KEY .env | cut -d '=' -f2)
+            echo "Set THE_ODDS_API_KEY from .env"
+        fi
+
+        nohup uvicorn app.main:app --host 0.0.0.0 --port 8001 > uvicorn.log 2>&1 &
+        echo "Service started (PID: $!)"
 EOF
 
     # Wait for service to start
@@ -195,27 +208,27 @@ verify_deployment() {
         log_warn "⚠️ API Health check failed or timeout"
     fi
 
-    # Check odds endpoints
-    log_info "Checking odds endpoints..."
+    # Check data endpoints (HYBRID APPROACH)
+    log_info "Checking hybrid data endpoints..."
 
-    # Odds quota endpoint
-    if curl -s --max-time 10 "http://${REMOTE_HOST}:8001/api/odds/quota" > /dev/null 2>&1; then
-        log_info "✅ Odds quota endpoint: Available"
+    # Status endpoint
+    if curl -s --max-time 10 "http://${REMOTE_HOST}:8001/api/data/status" > /dev/null 2>&1; then
+        log_info "✅ Data status endpoint: Available"
     else
-        log_warn "⚠️ Odds quota endpoint: Not responding (may need API key)"
+        log_warn "⚠️ Data status endpoint: Not responding"
     fi
 
-    # Predictions with odds endpoint
-    if curl -s --max-time 10 "http://${REMOTE_HOST}:8001/api/odds/predictions/with-odds" > /dev/null 2>&1; then
-        log_info "✅ Predictions with odds endpoint: Available"
+    # Odds API schedule endpoint (NEW)
+    if curl -s --max-time 10 "http://${REMOTE_HOST}:8001/api/data/fetch/from-odds" > /dev/null 2>&1; then
+        log_info "✅ Odds API schedule endpoint: Available"
     else
-        log_warn "⚠️ Predictions with odds endpoint: Not responding"
+        log_warn "⚠️ Odds API schedule endpoint: Not responding (may need THE_ODDS_API_KEY)"
     fi
 
     # Get endpoint list
     log_info "Fetching available endpoints..."
     curl -s --max-time 10 "http://${REMOTE_HOST}:8001/openapi.json" 2>/dev/null | \
-        python3 -c "import sys, json; data = json.load(sys.stdin); paths = data.get('paths', {}); odds_paths = [p for p in paths.keys() if 'odds' in p]; print('\\n'.join(odds_paths))" 2>/dev/null || \
+        python3 -c "import sys, json; data = json.load(sys.stdin); paths = list(data.get('paths', {}).keys()); print('Total endpoints:', len(paths)); print(''); print('Data endpoints:'); [print('  ', p) for p in paths if '/api/data/' in p]; print(''); print('Odds endpoints:'); [print('  ', p) for p in paths if '/api/odds/' in p]" 2>/dev/null || \
         echo "Could not fetch endpoint list"
 }
 
@@ -229,24 +242,37 @@ print_summary() {
     echo "Remote Path: ${REMOTE_PATH}"
     echo "Backup Location: ${BACKUP_DIR}"
     echo ""
-    echo "New Endpoints:"
-    echo "  GET  /api/odds/quota"
-    echo "  POST /api/odds/fetch/game-odds"
-    echo "  POST /api/odds/fetch/player-props/{game_id}"
-    echo "  POST /api/odds/predictions/update-odds"
-    echo "  GET  /api/odds/game/{game_id}"
-    echo "  GET  /api/odds/predictions/with-odds"
+    echo "HYBRID ARCHITECTURE:"
+    echo "  The Odds API → Game schedule + betting odds"
+    echo "  Sport APIs    → Player statistics"
+    echo ""
+    echo "Key Endpoints:"
+    echo "  POST /api/data/fetch/from-odds      - Fetch games from Odds API (PRIMARY)"
+    echo "  POST /api/data/fetch/players        - Fetch players from sport API"
+    echo "  POST /api/predictions/generate/upcoming - Generate predictions"
+    echo "  POST /api/odds/fetch/game-odds      - Fetch betting odds"
+    echo "  GET  /api/data/status               - Database status"
     echo ""
     echo "Test Commands:"
-    echo "  curl \"http://${REMOTE_HOST}:8001/api/odds/quota\""
-    echo "  curl -X POST \"http://${REMOTE_HOST}:8001/api/odds/fetch/game-odds?days_ahead=7\""
-    echo "  curl \"http://${REMOTE_HOST}:8001/api/odds/predictions/with-odds?has_odds_only=true\""
+    echo "  # Fetch games (HYBRID APPROACH)"
+    echo "  curl -X POST \"http://${REMOTE_HOST}:8001/api/data/fetch/from-odds\""
+    echo ""
+    echo "  # Fetch players from NBA"
+    echo "  curl -X POST \"http://${REMOTE_HOST}:8001/api/data/fetch/players\""
+    echo ""
+    echo "  # Generate predictions"
+    echo "  curl -X POST \"http://${REMOTE_HOST}:8001/api/predictions/generate/upcoming\""
+    echo ""
+    echo "  # Check status"
+    echo "  curl \"http://${REMOTE_HOST}:8001/api/data/status\""
     echo ""
     echo "To rollback if needed:"
-    echo "  systemctl stop ${SERVICE_NAME}"
+    echo "  ssh ${REMOTE_USER}@${REMOTE_HOST}"
+    echo "  pkill -9 -f uvicorn"
     echo "  rm -rf ${REMOTE_PATH}"
     echo "  cp -r ${BACKUP_DIR}/sports-bet-ai-api ${REMOTE_PATH}"
-    echo "  systemctl start ${SERVICE_NAME}"
+    echo "  cd ${REMOTE_PATH} && source venv/bin/activate"
+    echo "  uvicorn app.main:app --host 0.0.0.0 --port 8001 &"
     echo ""
 }
 
