@@ -268,15 +268,21 @@ class OddsMapper:
             List of prediction update data
         """
         updates = []
+        outcomes_processed = 0
 
         try:
+            logger.info(f"Starting player props mapping for game {game.id}, markets: {list(props_data.get('markets', {}).keys())}")
             for market_key, market_data in props_data.get("markets", {}).items():
+                logger.info(f"Processing market {market_key}, data keys: {list(market_data.keys()) if isinstance(market_data, dict) else 'not a dict'}")
+
                 if not market_data:
                     continue
 
                 # market_data is a dict with "bookmakers" key, not a list
                 # Get the bookmakers list from the market_data dict
                 bookmakers = market_data.get("bookmakers", [])
+                logger.info(f"Market {market_key}: bookmakers count = {len(bookmakers)}")
+
                 if not bookmakers:
                     continue
 
@@ -292,6 +298,7 @@ class OddsMapper:
 
                         # Process outcomes for this market
                         for outcome in market.get("outcomes", []):
+                            outcomes_processed += 1
                             player_name = outcome.get("description", "")
                             if not player_name or player_name == "None":
                                 continue
@@ -332,6 +339,8 @@ class OddsMapper:
                                     }
 
                                     updates.append(update_data)
+
+            logger.info(f"Player props mapping complete: {outcomes_processed} outcomes processed, {len(updates)} updates generated")
 
         except Exception as e:
             logger.error(f"Error mapping player props: {e}")
