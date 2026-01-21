@@ -149,10 +149,10 @@ User Query → @seangai_bot → Clawdbot Gateway
                                     ↓
                     ┌───────────────┴───────────────┐
                     ↓                               ↓
-              sports-api                      nfl-api
+              nba-api                        nfl-api
               (NBA only)                     (NFL only)
                     ↓                               ↓
-            sports_client.py               nfl_client.py
+            nba_client.py                 nfl_client.py
                     ↓                               ↓
               Sports API                    Sports API
               (Port 8001)                   (Port 8001)
@@ -160,7 +160,7 @@ User Query → @seangai_bot → Clawdbot Gateway
 
 ### Skill Configuration
 
-**sports-api**: NBA basketball predictions
+**nba-api**: NBA basketball predictions
 - Commands: `bets`, `player <name>`, `search <name>`, `health`
 - Description: "**NBA ONLY** - For NBA basketball predictions"
 
