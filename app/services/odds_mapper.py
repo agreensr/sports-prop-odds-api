@@ -234,6 +234,24 @@ class OddsMapper:
 
         return player
 
+    def _market_to_stat_type(self, market_key: str) -> str:
+        """
+        Convert Odds API market key to database stat_type.
+
+        Args:
+            market_key: The Odds API market key (e.g., "player_points")
+
+        Returns:
+            Database stat_type value (e.g., "points")
+        """
+        mapping = {
+            "player_points": "points",
+            "player_rebounds": "rebounds",
+            "player_assists": "assists",
+            "player_threes": "threes"
+        }
+        return mapping.get(market_key, market_key.replace("player_", ""))
+
     def map_player_props_to_predictions(
         self,
         props_data: Dict,
@@ -256,39 +274,44 @@ class OddsMapper:
                 if not market_data:
                     continue
 
-                for bookmaker_data in market_data:
-                    bookmaker_title = bookmaker_data.get("bookmaker", {})
-                    if not isinstance(bookmaker_title, dict):
-                        continue
+                # market_data is a dict with "bookmakers" key, not a list
+                # Get the bookmakers list from the market_data dict
+                bookmakers = market_data.get("bookmakers", [])
+                if not bookmakers:
+                    continue
 
-                    bookmaker_key = bookmaker_title.get("key", "unknown")
-                    bookmaker_name = bookmaker_title.get("title", "Unknown")
+                for bookmaker_data in bookmakers:
+                    # bookmaker_data is now a dict with "title", "key", "markets", etc.
+                    bookmaker_key = bookmaker_data.get("key", "unknown")
+                    bookmaker_name = bookmaker_data.get("title", "Unknown")
 
-                    for outcome in bookmaker_data.get("outcomes", []):
-                        player_name = outcome.get("description", "")
-                        if not player_name:
+                    # Each bookmaker has markets, find the matching market
+                    for market in bookmaker_data.get("markets", []):
+                        if market.get("key") != market_key:
                             continue
 
-                        # Extract player name from description like "Ja Morant Over 45.5"
-                        # Format varies, try to extract name
-                        name_parts = player_name.split()
-                        if len(name_parts) >= 2:
-                            # Assume first two parts are first/last name
-                            first_name = name_parts[0]
-                            last_name = name_parts[1]
-                            search_name = f"{first_name} {last_name}"
+                        # Process outcomes for this market
+                        for outcome in market.get("outcomes", []):
+                            player_name = outcome.get("description", "")
+                            if not player_name or player_name == "None":
+                                continue
 
-                            # Try to find player
-                            player = self.find_player_by_name_and_team(search_name, game.home_team)
+                            # Try to find player by exact name match
+                            player = self.find_player_by_name_and_team(player_name, game.home_team)
                             if not player:
-                                player = self.find_player_by_name_and_team(search_name, game.away_team)
+                                player = self.find_player_by_name_and_team(player_name, game.away_team)
+
+                            logger.info(f"Player props mapping: name={player_name}, home_team={game.home_team}, away_team={game.away_team}, player_found={player is not None}")
 
                             if player:
-                                # Check if prediction exists
+                                # Check if prediction exists for this player, game, and stat_type
                                 prediction = self.db.query(Prediction).filter(
                                     Prediction.player_id == player.id,
-                                    Prediction.game_id == game.id
+                                    Prediction.game_id == game.id,
+                                    Prediction.stat_type == self._market_to_stat_type(market_key)
                                 ).first()
+
+                                logger.info(f"Player props mapping: prediction found for player_id={player.id}, game_id={game.id}, stat_type={self._market_to_stat_type(market_key)}")
 
                                 if prediction:
                                     # Extract line and price
