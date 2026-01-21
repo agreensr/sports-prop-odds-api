@@ -13,6 +13,40 @@ from app.models.models import Game, GameOdds, Player, Prediction
 
 logger = logging.getLogger(__name__)
 
+# Team name mapping: The Odds API full names -> 3-letter abbreviations
+TEAM_NAME_TO_ABBREV = {
+    "Atlanta Hawks": "ATL",
+    "Boston Celtics": "BOS",
+    "Brooklyn Nets": "BKN",
+    "Charlotte Hornets": "CHA",
+    "Chicago Bulls": "CHI",
+    "Cleveland Cavaliers": "CLE",
+    "Dallas Mavericks": "DAL",
+    "Denver Nuggets": "DEN",
+    "Detroit Pistons": "DET",
+    "Golden State Warriors": "GSW",
+    "Houston Rockets": "HOU",
+    "Indiana Pacers": "IND",
+    "Los Angeles Clippers": "LAC",
+    "Los Angeles Lakers": "LAL",
+    "Memphis Grizzlies": "MEM",
+    "Miami Heat": "MIA",
+    "Milwaukee Bucks": "MIL",
+    "Minnesota Timberwolves": "MIN",
+    "New Orleans Pelicans": "NOP",
+    "New York Knicks": "NYK",
+    "Oklahoma City Thunder": "OKC",
+    "Orlando Magic": "ORL",
+    "Philadelphia 76ers": "PHI",
+    "Phoenix Suns": "PHX",
+    "Portland Trail Blazers": "POR",
+    "Sacramento Kings": "SAC",
+    "San Antonio Spurs": "SAS",
+    "Toronto Raptors": "TOR",
+    "Utah Jazz": "UTA",
+    "Washington Wizards": "WAS"
+}
+
 
 class OddsMapper:
     """Map odds API data to database models."""
@@ -25,6 +59,18 @@ class OddsMapper:
             db: SQLAlchemy database session
         """
         self.db = db
+
+    def _team_name_to_abbrev(self, team_name: str) -> str:
+        """
+        Convert full team name to 3-letter abbreviation.
+
+        Args:
+            team_name: Full team name from The Odds API
+
+        Returns:
+            3-letter team abbreviation, or first 3 chars if not found
+        """
+        return TEAM_NAME_TO_ABBREV.get(team_name, team_name[:3].upper())
 
     def find_game_by_external_id(self, external_id: str) -> Optional[Game]:
         """

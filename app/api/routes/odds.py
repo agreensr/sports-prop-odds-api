@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.services.odds_api_service import get_odds_service
 from app.services.odds_mapper import OddsMapper
-from app.models.models import Game, GameOdds, Prediction
+from app.models.models import Game, GameOdds, Player, Prediction
 
 logger = logging.getLogger(__name__)
 
@@ -121,15 +121,18 @@ async def fetch_game_odds(
                 game = mapper.find_game_by_external_id(game_data["id"])
 
                 if not game:
-                    # Create new game
+                    # Create new game with team name abbreviations
                     now = datetime.utcnow()
+                    away_team_abbr = mapper._team_name_to_abbrev(game_data["away_team"])
+                    home_team_abbr = mapper._team_name_to_abbrev(game_data["home_team"])
+
                     game = Game(
                         id=str(uuid.uuid4()),
                         external_id=game_data["id"],
                         id_source="nba",
                         game_date=datetime.fromisoformat(game_data["commence_time"].replace("Z", "+00:00")),
-                        away_team=game_data["away_team"],
-                        home_team=game_data["home_team"],
+                        away_team=away_team_abbr,
+                        home_team=home_team_abbr,
                         season=datetime.fromisoformat(game_data["commence_time"].replace("Z", "+00:00")).year,
                         status="scheduled",
                         created_at=now,

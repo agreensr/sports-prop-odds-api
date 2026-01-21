@@ -118,9 +118,10 @@ class OddsApiService:
 
             for market in ["h2h", "spreads", "totals"]:
                 params = {
-                    "sport": "basketball_nba",
+                    "apiKey": self.api_key,
                     "days": days_ahead,
-                    "market": market
+                    "market": market,
+                    "regions": "us"
                 }
 
                 response = await client.get(
@@ -196,9 +197,10 @@ class OddsApiService:
 
             for market in markets:
                 params = {
-                    "sport": "basketball_nba",
+                    "apiKey": self.api_key,
                     "event": event_id,
-                    "market": market
+                    "market": market,
+                    "regions": "us"
                 }
 
                 response = await client.get(
@@ -235,7 +237,15 @@ class OddsApiService:
         try:
             client = await self._get_client()
 
-            response = await client.get(f"{THE_ODDS_API_BASE}/sports/basketball_nba/odds")
+            # Make a simple request to check quota - need valid parameters
+            params = {
+                "apiKey": self.api_key,
+                "sport": "basketball_nba"
+            }
+            response = await client.get(
+                f"{THE_ODDS_API_BASE}/sports/basketball_nba/scores",
+                params=params
+            )
             response.raise_for_status()
 
             # Check rate limit headers
