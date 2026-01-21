@@ -315,4 +315,106 @@ class OddsMapper:
 
         return updates
 
+    def create_games_from_odds_schedule(
+        self,
+        schedule_data: List[Dict]
+    ) -> Dict[str, Any]:
+        """
+        Create or update Game records from The Odds API schedule data.
+
+        This is the primary method for creating games in the hybrid approach.
+        The Odds API becomes the single source of truth for game schedule.
+
+        Args:
+            schedule_data: List of game data from The Odds API
+
+        Returns:
+            Dictionary with created, updated, and skipped counts
+        """
+        created = 0
+        updated = 0
+        skipped = 0
+        errors = []
+
+        for game_data in schedule_data:
+            try:
+                # Extract basic game info
+                external_id = game_data.get("id")
+                sport_key = game_data.get("sport_key")
+                home_team_name = game_data.get("home_team")
+                away_team_name = game_data.get("away_team")
+                commence_time_str = game_data.get("commence_time")
+
+                if not all([external_id, home_team_name, away_team_name, commence_time_str]):
+                    logger.warning(f"Skipping game with missing required fields: {game_data}")
+                    skipped += 1
+                    continue
+
+                # Convert team names to abbreviations
+                home_team = self._team_name_to_abbrev(home_team_name)
+                away_team = self._team_name_to_abbrev(away_team_name)
+
+                # Parse commence time (ISO format with timezone)
+                commence_time = datetime.fromisoformat(commence_time_str.replace("Z", "+00:00"))
+
+                # Determine season from game date (NBA season spans calendar years)
+                game_year = commence_time.year
+                if commence_time.month >= 10:
+                    season = game_year + 1
+                else:
+                    season = game_year
+
+                # Check if game exists
+                existing_game = self.find_game_by_external_id(external_id)
+
+                if existing_game:
+                    # Update existing game
+                    existing_game.home_team = home_team
+                    existing_game.away_team = away_team
+                    existing_game.game_date = commence_time
+                    existing_game.season = season
+                    existing_game.status = "scheduled"  # Odds API only returns scheduled games
+                    existing_game.updated_at = datetime.utcnow()
+                    updated += 1
+                    logger.debug(f"Updated game: {away_team} @ {home_team}")
+
+                else:
+                    # Create new game
+                    import uuid
+                    new_game = Game(
+                        id=str(uuid.uuid4()),
+                        external_id=external_id,
+                        id_source="odds_api",  # Track that this came from The Odds API
+                        game_date=commence_time,
+                        away_team=away_team,
+                        home_team=home_team,
+                        status="scheduled",
+                        season=season,
+                        created_at=datetime.utcnow(),
+                        updated_at=datetime.utcnow()
+                    )
+                    self.db.add(new_game)
+                    created += 1
+                    logger.debug(f"Created game: {away_team} @ {home_team} on {commence_time}")
+
+            except Exception as e:
+                logger.error(f"Error processing game {game_data.get('id')}: {e}")
+                errors.append(f"{game_data.get('id', 'unknown')}: {str(e)}")
+                skipped += 1
+
+        try:
+            self.db.commit()
+            logger.info(f"Game schedule sync: {created} created, {updated} updated, {skipped} skipped")
+        except Exception as e:
+            self.db.rollback()
+            logger.error(f"Error committing games: {e}")
+            raise
+
+        return {
+            "created": created,
+            "updated": updated,
+            "skipped": skipped,
+            "errors": errors
+        }
+
 import uuid

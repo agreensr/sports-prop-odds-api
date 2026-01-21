@@ -258,11 +258,14 @@ class NBAService:
                 # Parse the game date/time
                 try:
                     # Format is typically "YYYY-MM-DDTHH:MM:SS"
+                    # NBA API returns this in Eastern Time (no timezone marker)
                     base_datetime = game_date_str_api.replace('T', ' ')
-                    if not base_datetime.endswith('Z') and '+' not in base_datetime:
-                        # Add timezone info if missing (assume Eastern Time for NBA)
-                        base_datetime = base_datetime + "-05:00"
-                    game_datetime = datetime.fromisoformat(base_datetime)
+
+                    # Parse as naive datetime (Eastern Time), then localize and convert to UTC
+                    from datetime import timezone, timedelta
+                    naive_dt = datetime.strptime(base_datetime, "%Y-%m-%d %H:%M:%S")
+                    eastern = timezone(timedelta(hours=-5))  # EST is UTC-5
+                    game_datetime = naive_dt.replace(tzinfo=eastern).astimezone(timezone.utc)
                 except Exception as e:
                     logger.warning(f"Error parsing game datetime for {game_dict.get('GAME_ID')}: {e}")
                     # Fall back to the passed date at noon

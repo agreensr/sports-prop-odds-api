@@ -1,13 +1,18 @@
 """
-Data fetching routes using NBA API with timeout handling and fallback to cached data.
+Data fetching routes using HYBRID APPROACH (The Odds API + Sport APIs).
 
-Uses nba_api library to fetch official NBA.com data for:
-- Upcoming games (scoreboard)
-- Player rosters and information
-- Game details and box scores
+HYBRID ARCHITECTURE:
+- The Odds API: Game schedule and betting odds (primary schedule source)
+- Sport-specific APIs (NBA, NFL, etc.): Player statistics and historical data
+
+This approach provides:
+- Accurate scheduling with proper timezone handling
+- Consistent multi-sport support
+- Rich player statistics for ML predictions
 """
 import asyncio
 import logging
+import os
 import uuid
 from datetime import date, datetime, timedelta
 from typing import Optional
@@ -17,11 +22,16 @@ from sqlalchemy.orm import Session
 
 from app.models.models import Game, Player, Prediction
 from app.services.nba_service import NBAService
+from app.services.odds_api_service import get_odds_service
+from app.services.odds_mapper import OddsMapper
 from app.core.database import get_db
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/data", tags=["data"])
+
+# Get API key from environment
+ODDS_API_KEY = os.getenv("THE_ODDS_API_KEY", "")
 
 
 @router.post("/fetch/upcoming")
@@ -163,6 +173,69 @@ async def fetch_upcoming_games(
         raise HTTPException(
             status_code=500,
             detail=f"Error fetching upcoming games: {str(e)}"
+        )
+
+
+@router.post("/fetch/from-odds")
+async def fetch_games_from_odds(
+    days_ahead: int = 7,
+    db: Session = Depends(get_db)
+):
+    """
+    Fetch upcoming games from The Odds API (HYBRID APPROACH).
+
+    This is the PRIMARY method for fetching games in the hybrid architecture.
+    The Odds API becomes the single source of truth for game schedule.
+
+    Benefits:
+    - No timezone issues (Odds API uses proper ISO timestamps)
+    - Only games with betting markets (relevant for predictions)
+    - Consistent format across all sports (NBA, NFL, NHL, MLB)
+
+    Workflow:
+    1. Fetch schedule from The Odds API
+    2. Create/update Game records in database
+    3. Use sport-specific APIs for player statistics (separate endpoint)
+
+    Args:
+        days_ahead: Number of days ahead to fetch (default: 7)
+
+    Returns:
+        Summary of games created/updated
+    """
+    try:
+        odds_service = get_odds_service(ODDS_API_KEY)
+        odds_mapper = OddsMapper(db)
+
+        # Fetch upcoming games from The Odds API
+        schedule_data = await odds_service.get_upcoming_games_with_odds()
+
+        if not schedule_data:
+            return {
+                "message": "No upcoming games found from The Odds API",
+                "created": 0,
+                "updated": 0,
+                "total": 0
+            }
+
+        # Create/update Game records
+        result = odds_mapper.create_games_from_odds_schedule(schedule_data)
+
+        return {
+            "message": f"Successfully synced game schedule from The Odds API",
+            "created": result["created"],
+            "updated": result["updated"],
+            "skipped": result["skipped"],
+            "total": result["created"] + result["updated"],
+            "errors": result["errors"]
+        }
+
+    except Exception as e:
+        logger.error(f"Error in fetch_from_odds: {e}")
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error fetching games from The Odds API: {str(e)}"
         )
 
 
