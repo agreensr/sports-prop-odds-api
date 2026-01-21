@@ -1,246 +1,202 @@
-# NBA Player Prop Prediction API - ESPN Integration Fixes
+# NBA Player Prop Prediction API
 
-> Fixed version with ESPN ID lookup, timeout handling, and caching.
+AI-powered NBA player prop predictions using recent game averages with betting odds integration.
 
-## 🏀 Overview
+## Tech Stack
 
-This API provides AI-powered NBA player prop predictions with ESPN data integration. This version includes critical fixes for player lookup errors and timeout issues.
+- **Python 3.12** with FastAPI
+- **NBA API** (nba_api) for official NBA.com data
+- **The Odds API** for betting odds from bookmakers
+- **PostgreSQL** for database
+- **Automated cron jobs** for daily data fetching
 
-## 📋 Fixes Implemented
-
-| Issue | Fix | Status |
-|-------|-----|--------|
-| Player 404 error | Added `/api/predictions/player/espn/{espn_id}` endpoint | ✅ Fixed |
-| fetch_upcoming timeout | 15s timeout with cached data fallback | ✅ Fixed |
-| Player data missing | Player search endpoint with name matching | ✅ Fixed |
-| No ESPN caching | 5-minute TTL cache for scoreboard data | ✅ Fixed |
-
-## 🚀 Quick Start
-
-### Local Development
-
-```bash
-# Install dependencies
-pip install -r requirements.txt
-
-# Copy environment file
-cp .env.example .env
-
-# Run the API
-uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload
-```
-
-### Docker Deployment
-
-```bash
-# Build image
-docker build -t sports-api .
-
-# Run container
-docker run -p 8001:8001 --env-file .env sports-api
-```
-
-## 📡 API Endpoints
-
-### Health & Status
-
-```bash
-# Basic health check
-GET /health
-
-# Detailed status with database counts
-GET /api/health
-
-# Data statistics
-GET /api/data/status
-```
-
-### Player Endpoints (NEW)
-
-```bash
-# Search players by name (NEW - fixes 404 error)
-GET /api/players/search?name=lebron
-
-# Get player by ESPN ID (NEW)
-GET /api/players/espn/2544
-
-# Get player predictions by ESPN ID (NEW)
-GET /api/predictions/player/espn/2544
-
-# List all players with filters
-GET /api/players?team=LAL&position=SF
-```
-
-### Prediction Endpoints
-
-```bash
-# Get predictions by database UUID
-GET /api/predictions/player/{uuid}
-
-# Get predictions by ESPN ID (NEW)
-GET /api/predictions/player/espn/{espn_id}
-
-# Get game predictions
-GET /api/predictions/game/espn/{game_id}
-
-# Get top picks by confidence
-GET /api/predictions/top?min_confidence=0.7
-```
-
-### Data Fetching (FIXED)
-
-```bash
-# Fetch upcoming games with timeout protection (FIXED)
-POST /api/data/fetch/upcoming
-{
-  "days_ahead": 7,
-  "use_cache": true
-}
-
-# Fetch players from ESPN
-POST /api/data/fetch/players?limit=1000
-```
-
-## 🔧 Clawdbot Skill
-
-### Installation
-
-```bash
-# Copy skill to Clawdbot directory
-cp -r clawdbot-skill/sports-api ~/.clawdbot/skills/
-
-# Set environment variable
-export SPORTS_API_URL="http://89.117.150.95:8001"
-
-# Enable in clawdbot.json
-# Add "sports-api": {"enabled": true} to skills.entries
-
-# Restart Clawdbot
-clawdbot gateway restart
-```
-
-### Usage
-
-```bash
-# Check API health
-~/.clawdbot/skills/sports-api/scripts/sports_client.py health
-
-# Search for player by name
-~/.clawdbot/skills/sports-api/scripts/sports_client.py search lebron
-
-# Get predictions by ESPN ID (NEW)
-~/.clawdbot/skills/sports-api/scripts/sports_client.py player_espn 2544
-
-# Fetch upcoming games (with timeout fix)
-~/.clawdbot/skills/sports-api/scripts/sports_client.py fetch_upcoming 7
-```
-
-## 🧪 Testing
-
-### Test ESPN Player Lookup
-
-```bash
-# Should return LeBron's predictions
-curl "http://89.117.150.95:8001/api/predictions/player/espn/2544"
-```
-
-### Test fetch_upcoming Timeout
-
-```bash
-# Should complete within 15 seconds
-curl -X POST "http://89.117.150.95:8001/api/data/fetch/upcoming" \
-  -H "Content-Type: application/json" \
-  -d '{"days_ahead": 7}'
-```
-
-### Test Player Search
-
-```bash
-# Should return player with ESPN ID
-curl "http://89.117.150.95:8001/api/players/search?name=lebron"
-```
-
-## 📁 Project Structure
+## Project Structure
 
 ```
 sports-bet-ai-api/
 ├── app/
 │   ├── api/
 │   │   └── routes/
-│   │       ├── predictions.py    # ESPN ID lookup endpoint
-│   │       ├── players.py        # Player search endpoint
-│   │       └── data.py           # Timeout-fixed fetch_upcoming
+│   │       ├── predictions.py    # Prediction endpoints
+│   │       ├── players.py        # Player endpoints
+│   │       ├── data.py           # Data fetching endpoints
+│   │       └── odds.py           # Odds endpoints
 │   ├── core/
-│   │   ├── config.py             # Configuration settings
-│   │   └── database.py           # Database session management
+│   │   └── database.py            # Database session management
+│   ├── ml/
+│   │   ├── features.py            # Feature engineering
+│   │   └── training.py            # Training pipeline
 │   ├── models/
-│   │   └── models.py             # SQLAlchemy models
+│   │   └── models.py             # SQLAlchemy models (Game, Player, Prediction, PlayerStats, GameOdds)
 │   ├── services/
-│   │   └── espn_service.py       # ESPN API with caching
-│   └── main.py                   # FastAPI application
-├── clawdbot-skill/
-│   └── sports-api/
-│       ├── SKILL.md              # Skill metadata
-│       └── scripts/
-│           └── sports_client.py  # Updated CLI client
-├── requirements.txt
-├── .env.example
-└── README.md
+│   │   ├── nba_service.py        # NBA API integration
+│   │   ├── odds_api_service.py   # The Odds API client
+│   │   ├── odds_mapper.py        # Data transformation
+│   │   └── prediction_service.py # Prediction generation
+│   └── main.py                    # FastAPI application
+├── scripts/
+│   ├── daily_odds_fetch.py      # Daily automation (7am CST)
+│   ├── automated_stat_import.py # Stat import automation
+│   └── export_training_data.py  # Data export
+└── models/                         # ML model storage
 ```
 
-## 🗄️ Database Models
+## VPS Setup
 
-### Player
-- `id`: UUID (primary key)
-- `external_id`: ESPN player ID (indexed) - **Key for fixes**
-- `name`, `team`, `position`
-
-### Game
-- `id`: UUID (primary key)
-- `external_id`: ESPN event ID
-- `game_date`, `away_team`, `home_team`, `status`
-
-### Prediction
-- `id`: UUID (primary key)
-- `player_id`, `game_id` (foreign keys)
-- `stat_type`, `predicted_value`, `recommendation`, `confidence`
-
-## 🔒 Environment Variables
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `DATABASE_URL` | PostgreSQL connection string | postgresql://... |
-| `SPORTS_API_URL` | API base URL for Clawdbot | http://localhost:8001 |
-| `ESPN_CACHE_TTL` | Cache time-to-live (seconds) | 300 |
-| `ESPN_TIMEOUT` | ESPN API timeout (seconds) | 15.0 |
-| `LOG_LEVEL` | Logging verbosity | INFO |
-
-## 📊 ESPN API Endpoints Used
-
-| Endpoint | Purpose | Cached |
-|----------|---------|--------|
-| `/apis/site/v2/sports/basketball/nba/scoreboard?dates=YYYYMMDD` | Get games | ✅ 5 min |
-| `/apis/site/v2/sports/basketball/nba/summary?event={game_id}` | Box score | ✅ 5 min |
-| `/apis/site/v3/sports/basketball/nba/athletes?limit=1000` | All players | ✅ 30 min |
-
-## 🔄 Rollback Plan
-
-If changes cause issues:
-
+### SSH to VPS
 ```bash
-# Revert predictions.py changes
-git checkout HEAD -- app/api/routes/predictions.py
-
-# Remove new players endpoint
-rm app/api/routes/players.py
-
-# Restore original espn_service.py
-git checkout HEAD -- app/services/espn_service.py
-
-# Restart API
-systemctl --user restart sports-api
+ssh sean-ubuntu-vps
+cd /opt/sports-bet-ai-api
 ```
 
-## 📝 License
+### Environment Variables
+Edit `.env` file:
+```
+THE_ODDS_API_KEY=your_api_key_here
+DATABASE_URL=postgresql://postgres:password@localhost:5432/sports_betting
+LOG_LEVEL=INFO
+```
+
+## Automated Systems
+
+### Daily Odds Fetch (7:00 AM CST)
+
+Automated script that:
+1. Fetches upcoming games from The Odds API (next 2-3 days)
+2. Generates predictions for games without them
+3. Fetches player props odds for games within 2 hours of start
+
+**Cron Schedule:**
+```bash
+# Runs daily at 7:00 AM CST (1:00 PM UTC)
+0 13 * * * cd /opt/sports-bet-ai-api && source venv/bin/activate && python scripts/daily_odds_fetch.py
+```
+
+**API Usage:** ~20 requests/day (well within 1500 request free tier)
+
+### Stat Import Automation
+
+**Cron Jobs:**
+```bash
+# Daily stat import at 6 AM UTC (previous day's games)
+0 6 * * * cd /opt/sports-bet-ai-api && source venv/bin/activate && python scripts/automated_stat_import.py --daily
+
+# Weekly roster update (Sundays at 7 AM UTC)
+0 7 * * 0 cd /opt/sports-bet-ai-api && source venv/bin/activate && python scripts/automated_stat_import.py --roster --limit 500
+
+# Recent game logs refresh (Tuesdays at 8 AM UTC)
+0 8 * * 2 cd /opt/sports-bet-ai-api && source venv/bin/activate && python scripts/automated_stat_import.py --recent 7 --limit 200
+```
+
+## Data Sources
+
+### NBA API (nba_api)
+- **Purpose:** Official NBA.com data (players, games, stats)
+- **Usage:** Player rosters, game schedules, box scores
+- **Rate Limit:** Can be strict with 30s timeouts
+
+### The Odds API
+- **Purpose:** Betting odds from bookmakers
+- **Bookmakers:** FanDuel, DraftKings, BetRivers, PointsBet, Unibet
+- **Player Props:** points, rebounds, assists, threes
+- **Free Tier:** 500 requests/month (~16/day)
+
+**Important Notes:**
+- The Odds API has a 10-minute offset bug - corrected automatically
+- Player props only posted 12-24 hours before game time
+- Odds fetched within 2 hours of game start to ensure availability
+
+## Bookmaker Priority
+
+1. FanDuel (highest priority)
+2. DraftKings
+3. BetRivers
+4. PointsBet
+5. Unibet
+
+## Running the API
+
+### Development Server
+```bash
+cd /opt/sports-bet-ai-api
+source venv/bin/activate
+uvicorn app.main:app --host 0.0.0.0 --port 8001
+```
+
+### Production
+```bash
+# Run with environment variables
+export THE_ODDS_API_KEY=your_key
+uvicorn app.main:app --host 0.0.0.0 --port 8001
+```
+
+## API Endpoints
+
+### Predictions
+- `POST /api/predictions/generate` - Generate predictions for a game
+- `GET /api/predictions/game/{game_id}` - Get predictions for a game
+- `GET /api/predictions/player/nba/{nba_id}` - Get predictions by NBA ID
+- `GET /api/predictions/with-odds` - Get predictions with odds pricing
+
+### Data
+- `POST /api/data/fetch/upcoming` - Fetch upcoming games from NBA API
+- `POST /api/data/fetch/from-odds` - Fetch games from The Odds API
+- `GET /api/data/status` - Get system status
+
+### Odds
+- `POST /api/odds/fetch/game-odds` - Fetch game odds (moneyline, spread, totals)
+- `POST /api/odds/fetch/player-props/{game_id}` - Fetch player props for a game
+- `POST /api/odds/predictions/update-odds` - Update predictions with odds
+- `GET /api/odds/quota` - Check remaining API quota
+
+### Health Check
+- `GET /api/health` - System health and statistics
+
+## Prediction Model
+
+**Current Approach:** Recent game averages with position-based fallback
+
+- **Primary:** Average of last 10 games (minimum 3 games required)
+- **Fallback:** Position-based averages (PG, SG, SF, PF, C)
+- **Variation:** ±3% on recent averages for realism
+
+**Model Versions:**
+- `recent_avg_v2.0` - Actual recent stats
+- `position_average_v1.0` - Position fallback
+
+## Database Schema
+
+### Games Table
+- `id` - Internal UUID
+- `external_id` - NBA.com or Odds API game ID
+- `id_source` - Data source (nba, odds_api)
+- `game_date` - Game time (UTC)
+- `away_team`, `home_team` - 3-letter abbreviations
+- `season` - NBA season year
+- `status` - scheduled, in_progress, final
+
+### Players Table
+- `id` - Internal UUID
+- `external_id` - NBA.com player ID
+- `name` - Full name
+- `team` - 3-letter abbreviation
+- `position` - PG, SG, SF, PF, C, G, F
+- `active` - Boolean
+
+### Predictions Table
+- `predicted_value` - AI prediction
+- `bookmaker_line` - Bookmaker over/under line
+- `bookmaker_name` - FanDuel, DraftKings, etc.
+- `over_price`, `under_price` - American odds
+- `confidence` - Confidence score (0.35-0.75)
+- `recommendation` - OVER, UNDER, or NONE
+
+## Time Zone Notes
+
+- **Database Storage:** UTC
+- **Display:** Central Time (CST, UTC-6)
+- **The Odds API Correction:** -10 minutes applied to fix API bug
+
+## License
 
 MIT

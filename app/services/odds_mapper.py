@@ -5,7 +5,7 @@ This module handles the transformation of odds data from The Odds API format
 to the database model format, including game odds and player props.
 """
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Dict, Optional, Any
 from sqlalchemy.orm import Session
 
@@ -262,6 +262,11 @@ class OddsMapper:
 
         Args:
             props_data: Player props data from The Odds API
+                Structure: {
+                    "event_id": str,
+                    "markets": "player_points,player_rebounds,...",
+                    "data": {full API response with bookmakers and markets}
+                }
             game: Game database model
 
         Returns:
@@ -271,74 +276,102 @@ class OddsMapper:
         outcomes_processed = 0
 
         try:
-            logger.info(f"Starting player props mapping for game {game.id}, markets: {list(props_data.get('markets', {}).keys())}")
-            for market_key, market_data in props_data.get("markets", {}).items():
-                logger.info(f"Processing market {market_key}, data keys: {list(market_data.keys()) if isinstance(market_data, dict) else 'not a dict'}")
+            # Extract the game data from the response
+            game_data = props_data.get("data", {})
 
-                if not market_data:
-                    continue
+            if not game_data:
+                logger.warning(f"No data returned for event {props_data.get('event_id')}")
+                return updates
 
-                # market_data is a dict with "bookmakers" key, not a list
-                # Get the bookmakers list from the market_data dict
-                bookmakers = market_data.get("bookmakers", [])
-                logger.info(f"Market {market_key}: bookmakers count = {len(bookmakers)}")
+            logger.info(f"Starting player props mapping for game {game.id} ({game.away_team} @ {game.home_team})")
 
-                if not bookmakers:
-                    continue
+            # Get bookmakers from the API response
+            bookmakers = game_data.get("bookmakers", [])
 
-                for bookmaker_data in bookmakers:
-                    # bookmaker_data is now a dict with "title", "key", "markets", etc.
-                    bookmaker_key = bookmaker_data.get("key", "unknown")
-                    bookmaker_name = bookmaker_data.get("title", "Unknown")
+            if not bookmakers:
+                logger.info(f"No bookmakers with player props data (not available yet)")
+                return updates
 
-                    # Each bookmaker has markets, find the matching market
-                    for market in bookmaker_data.get("markets", []):
-                        if market.get("key") != market_key:
+            logger.info(f"Processing {len(bookmakers)} bookmakers with player props")
+
+            # Define the player props markets we're looking for
+            player_props_markets = ["player_points", "player_rebounds", "player_assists", "player_threes"]
+            markets_found = set()
+
+            for bookmaker_data in bookmakers:
+                bookmaker_name = bookmaker_data.get("title", "Unknown")
+                bookmaker_key = bookmaker_data.get("key", "unknown")
+
+                # Each bookmaker has multiple markets
+                for market in bookmaker_data.get("markets", []):
+                    market_key = market.get("key")
+
+                    # Skip non-player-props markets (h2h, spreads, totals, etc.)
+                    if market_key not in player_props_markets:
+                        continue
+
+                    markets_found.add(market_key)
+
+                    # Process player props outcomes
+                    outcomes = market.get("outcomes", [])
+
+                    if not outcomes:
+                        continue
+
+                    logger.info(f"  {bookmaker_name}: {market_key} - {len(outcomes)} outcomes")
+
+                    for outcome in outcomes:
+                        outcomes_processed += 1
+                        player_name = outcome.get("description", "")
+
+                        if not player_name or player_name == "None":
                             continue
 
-                        # Process outcomes for this market
-                        for outcome in market.get("outcomes", []):
-                            outcomes_processed += 1
-                            player_name = outcome.get("description", "")
-                            if not player_name or player_name == "None":
-                                continue
+                        # Try to find player by exact name match
+                        player = self.find_player_by_name_and_team(player_name, game.home_team)
+                        if not player:
+                            player = self.find_player_by_name_and_team(player_name, game.away_team)
 
-                            # Try to find player by exact name match
-                            player = self.find_player_by_name_and_team(player_name, game.home_team)
-                            if not player:
-                                player = self.find_player_by_name_and_team(player_name, game.away_team)
+                        if not player:
+                            logger.debug(f"    Player not found: {player_name}")
+                            continue
 
-                            logger.info(f"Player props mapping: name={player_name}, home_team={game.home_team}, away_team={game.away_team}, player_found={player is not None}")
+                        # Check if prediction exists for this player, game, and stat_type
+                        prediction = self.db.query(Prediction).filter(
+                            Prediction.player_id == player.id,
+                            Prediction.game_id == game.id,
+                            Prediction.stat_type == self._market_to_stat_type(market_key)
+                        ).first()
 
-                            if player:
-                                # Check if prediction exists for this player, game, and stat_type
-                                prediction = self.db.query(Prediction).filter(
-                                    Prediction.player_id == player.id,
-                                    Prediction.game_id == game.id,
-                                    Prediction.stat_type == self._market_to_stat_type(market_key)
-                                ).first()
+                        if not prediction:
+                            logger.debug(f"    No prediction found for {player_name} - {market_key}")
+                            continue
 
-                                logger.info(f"Player props mapping: prediction found for player_id={player.id}, game_id={game.id}, stat_type={self._market_to_stat_type(market_key)}")
+                        # Extract line and price
+                        line = outcome.get("point")
+                        price = outcome.get("price")
+                        outcome_name = outcome.get("name", "")
 
-                                if prediction:
-                                    # Extract line and price
-                                    line = outcome.get("point")
-                                    price = outcome.get("price")
-                                    outcome_name = outcome.get("name", "")
+                        # Determine if over or under
+                        is_over = "over" in outcome_name.lower()
 
-                                    # Determine if over or under
-                                    is_over = "over" in outcome_name.lower()
+                        update_data = {
+                            "prediction_id": str(prediction.id),
+                            "bookmaker_line": line,
+                            "bookmaker_name": bookmaker_name,
+                            "over_price": price if is_over else None,
+                            "under_price": price if not is_over else None,
+                            "odds_last_updated": datetime.utcnow()
+                        }
 
-                                    update_data = {
-                                        "prediction_id": str(prediction.id),
-                                        "bookmaker_line": line,
-                                        "bookmaker_name": bookmaker_name,
-                                        "over_price": price if is_over else None,
-                                        "under_price": price if not is_over else None,
-                                        "odds_last_updated": datetime.utcnow()
-                                    }
+                        updates.append(update_data)
+                        logger.info(f"    Mapped: {player.name} {market_key} {outcome_name} {line} @ {price}")
 
-                                    updates.append(update_data)
+            # Log summary
+            if markets_found:
+                logger.info(f"Player props markets found: {', '.join(sorted(markets_found))}")
+            else:
+                logger.info(f"No player props markets available yet (requested: {', '.join(player_props_markets)})")
 
             logger.info(f"Player props mapping complete: {outcomes_processed} outcomes processed, {len(updates)} updates generated")
 
@@ -388,6 +421,9 @@ class OddsMapper:
 
                 # Parse commence time (ISO format with timezone)
                 commence_time = datetime.fromisoformat(commence_time_str.replace("Z", "+00:00"))
+
+                # The Odds API has a 10-minute offset bug - subtract 10 minutes to get correct tip-off time
+                commence_time = commence_time - timedelta(minutes=10)
 
                 # Determine season from game date (NBA season spans calendar years)
                 game_year = commence_time.year

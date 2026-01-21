@@ -228,6 +228,10 @@ async def fetch_player_props_for_game(
         updated = 0
         errors = []
 
+        # Bookmaker priority (highest first)
+        BOOKMAKER_PRIORITY = [
+        "FanDuel", "DraftKings", "BetRivers", "PointsBet", "Unibet"
+    ]
         for update_data in updates:
             try:
                 prediction = db.query(Prediction).filter(
@@ -235,15 +239,42 @@ async def fetch_player_props_for_game(
                 ).first()
 
                 if prediction:
-                    prediction.over_price = update_data.get("over_price")
-                    prediction.under_price = update_data.get("under_price")
-                    prediction.odds_last_updated = update_data.get("odds_last_updated")
+                    new_bookmaker = update_data.get("bookmaker_name")
+                    current_bookmaker = prediction.bookmaker_name
 
-                    if not prediction.odds_fetched_at:
-                        prediction.odds_fetched_at = update_data.get("odds_last_updated")
+                    # Only update if:
+                    # 1. No existing bookmaker, OR
+                    # 2. New bookmaker is higher priority than current, OR
+                    # 3. Same bookmaker (update missing Over/Under prices)
+                    should_update = False
+                    if current_bookmaker is None:
+                        should_update = True
+                    elif new_bookmaker == current_bookmaker:
+                        # Same bookmaker - update to fill in missing Over/Under prices
+                        should_update = True
+                    elif new_bookmaker in BOOKMAKER_PRIORITY and current_bookmaker in BOOKMAKER_PRIORITY:
+                        new_priority = BOOKMAKER_PRIORITY.index(new_bookmaker)
+                        current_priority = BOOKMAKER_PRIORITY.index(current_bookmaker)
+                        should_update = new_priority < current_priority
 
-                    prediction.updated_at = datetime.utcnow()
-                    updated += 1
+                    if should_update:
+                        # Only update prices if they're not None (preserve existing prices)
+                        if update_data.get("over_price") is not None:
+                            prediction.over_price = update_data.get("over_price")
+                        if update_data.get("under_price") is not None:
+                            prediction.under_price = update_data.get("under_price")
+
+                        # Update bookmaker info
+                        prediction.bookmaker_line = update_data.get("bookmaker_line")
+                        prediction.bookmaker_name = new_bookmaker
+
+                        prediction.odds_last_updated = update_data.get("odds_last_updated")
+
+                        if not prediction.odds_fetched_at:
+                            prediction.odds_fetched_at = update_data.get("odds_last_updated")
+
+                        prediction.updated_at = datetime.utcnow()
+                        updated += 1
 
             except Exception as e:
                 logger.error(f"Error updating prediction {update_data.get('prediction_id')}: {e}")
@@ -262,13 +293,17 @@ async def fetch_player_props_for_game(
             Prediction.over_price.isnot(None)
         ).count()
 
+        # Parse markets string into list
+        markets_str = props_data.get("markets", "")
+        markets_list = markets_str.split(",") if markets_str else []
+
         return {
             "status": "success",
             "game_id": game_id,
             "predictions_updated": updated,
             "total_predictions": total_predictions,
             "predictions_with_odds": predictions_with_odds,
-            "markets_fetched": list(props_data.get("markets", {}).keys()),
+            "markets_fetched": markets_list,
             "errors": errors
         }
 
@@ -319,33 +354,61 @@ async def update_prediction_odds(
         games_processed = 0
         errors = []
 
-        for game in games:
-            try:
-                # Fetch player props for this game
-                props_data = await service.get_event_player_props(game.external_id)
+        # Bookmaker priority (highest first)
+        BOOKMAKER_PRIORITY = [
+        "FanDuel", "DraftKings", "BetRivers", "PointsBet", "Unibet"
+    ]
+        try:
+                for game in games:
+                    props_data = await service.get_event_player_props(game.external_id)
 
-                # Map to prediction updates
-                updates = mapper.map_player_props_to_predictions(props_data, game)
+                    # Map to prediction updates
+                    updates = mapper.map_player_props_to_predictions(props_data, game)
 
-                for update_data in updates:
-                    prediction = db.query(Prediction).filter(
-                        Prediction.id == update_data["prediction_id"]
-                    ).first()
+                    for update_data in updates:
+                        prediction = db.query(Prediction).filter(
+                            Prediction.id == update_data["prediction_id"]
+                        ).first()
 
-                    if prediction:
-                        prediction.over_price = update_data.get("over_price")
-                        prediction.under_price = update_data.get("under_price")
-                        prediction.odds_last_updated = update_data.get("odds_last_updated")
+                        if prediction:
+                            new_bookmaker = update_data.get("bookmaker_name")
+                            current_bookmaker = prediction.bookmaker_name
 
-                        if not prediction.odds_fetched_at:
-                            prediction.odds_fetched_at = update_data.get("odds_last_updated")
+                            # Only update if:
+                            # 1. No existing bookmaker, OR
+                            # 2. New bookmaker is higher priority than current, OR
+                            # 3. Same bookmaker (update missing Over/Under prices)
+                            should_update = False
+                            if current_bookmaker is None:
+                                should_update = True
+                            elif new_bookmaker == current_bookmaker:
+                                # Same bookmaker - update to fill in missing Over/Under prices
+                                should_update = True
+                            elif new_bookmaker in BOOKMAKER_PRIORITY and current_bookmaker in BOOKMAKER_PRIORITY:
+                                new_priority = BOOKMAKER_PRIORITY.index(new_bookmaker)
+                                current_priority = BOOKMAKER_PRIORITY.index(current_bookmaker)
+                                should_update = new_priority < current_priority
 
-                        prediction.updated_at = datetime.utcnow()
-                        total_updated += 1
+                            if should_update:
+                                # Only update prices if they're not None
+                                if update_data.get("over_price") is not None:
+                                    prediction.over_price = update_data.get("over_price")
+                                if update_data.get("under_price") is not None:
+                                    prediction.under_price = update_data.get("under_price")
+
+                                prediction.bookmaker_line = update_data.get("bookmaker_line")
+                                prediction.bookmaker_name = new_bookmaker
+                            prediction.odds_last_updated = update_data.get("odds_last_updated")
+
+                            if not prediction.odds_fetched_at:
+                                prediction.odds_fetched_at = update_data.get("odds_last_updated")
+
+                            prediction.updated_at = datetime.utcnow()
+                            total_updated += 1
 
                 games_processed += 1
 
-            except Exception as e:
+        except Exception as e:
                 logger.error(f"Error processing game {game.external_id}: {e}")
                 errors.append(f"{game.external_id}: {str(e)}")
 

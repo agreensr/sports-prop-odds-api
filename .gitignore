@@ -4,34 +4,49 @@ __pycache__/
 *$py.class
 *.so
 .Python
-venv/
-env/
-ENV/
 *.egg-info/
 dist/
 build/
 
+# Virtual Environment
+venv/
+env/
+ENV/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs
+*.log
+/logs/
+
 # Environment
 .env
 .env.local
+
+# Models
+models/*.joblib
+!models/.gitkeep
+
+# Data
+data/
+*.csv
+*.csv.gz
+*.parquet
 
 # IDE
 .vscode/
 .idea/
 *.swp
 *.swo
+*~
 
 # OS
 .DS_Store
 Thumbs.db
 
-# Logs
-*.log
-
-# Testing
-.pytest_cache/
-.coverage
-htmlcov/
-
-# Playwright
-.playwright-mcp/
+# Temporary files
+tmp/
+*.tmp
