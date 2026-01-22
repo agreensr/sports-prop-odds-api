@@ -9,7 +9,7 @@ Provides endpoints for:
 import logging
 import uuid
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
@@ -117,29 +117,42 @@ async def fetch_game_odds(
 
         for game_data in games_data:
             try:
-                # Find or create game
+                # Find or create game - first try external_id, then try team+date matching
                 game = mapper.find_game_by_external_id(game_data["id"])
 
                 if not game:
-                    # Create new game with team name abbreviations
+                    # Try to find existing game by team names and date
                     now = datetime.utcnow()
                     away_team_abbr = mapper._team_name_to_abbrev(game_data["away_team"])
                     home_team_abbr = mapper._team_name_to_abbrev(game_data["home_team"])
+                    commence_time = datetime.fromisoformat(game_data["commence_time"].replace("Z", "+00:00"))
 
-                    game = Game(
-                        id=str(uuid.uuid4()),
-                        external_id=game_data["id"],
-                        id_source="nba",
-                        game_date=datetime.fromisoformat(game_data["commence_time"].replace("Z", "+00:00")),
-                        away_team=away_team_abbr,
-                        home_team=home_team_abbr,
-                        season=datetime.fromisoformat(game_data["commence_time"].replace("Z", "+00:00")).year,
-                        status="scheduled",
-                        created_at=now,
-                        updated_at=now
-                    )
-                    db.add(game)
-                    db.flush()
+                    # Apply The Odds API 10-minute offset correction
+                    commence_time = commence_time - timedelta(minutes=10)
+
+                    game = mapper.find_game_by_teams(home_team_abbr, away_team_abbr, commence_time)
+
+                    if game:
+                        # Update existing game's external_id to match The Odds API
+                        game.external_id = game_data["id"]
+                        game.updated_at = now
+                        logger.info(f"Updated game {away_team_abbr} @ {home_team_abbr} with Odds API external_id: {game_data['id']}")
+                    else:
+                        # Create new game
+                        game = Game(
+                            id=str(uuid.uuid4()),
+                            external_id=game_data["id"],
+                            id_source="odds_api",
+                            game_date=commence_time,
+                            away_team=away_team_abbr,
+                            home_team=home_team_abbr,
+                            season=commence_time.year,
+                            status="scheduled",
+                            created_at=now,
+                            updated_at=now
+                        )
+                        db.add(game)
+                        db.flush()
 
                 # Map and insert odds
                 game_odds_list = mapper.map_game_odds(game_data, game)

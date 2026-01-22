@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from app.models.models import Player, Game, Prediction, Base
 from app.core.database import get_db
 from app.services.prediction_service import PredictionService
+from app.utils.timezone import format_game_time_central, utc_to_central
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +24,10 @@ router = APIRouter(prefix="/api/predictions", tags=["predictions"])
 
 
 def prediction_to_dict(pred: Prediction) -> dict:
-    """Convert Prediction model to dictionary with odds pricing."""
+    """Convert Prediction model to dictionary with odds pricing and Central time."""
+    # Convert game UTC time to Central Time for display
+    central_time = utc_to_central(pred.game.game_date)
+
     return {
         "id": str(pred.id),
         "player": {
@@ -36,7 +40,9 @@ def prediction_to_dict(pred: Prediction) -> dict:
         "game": {
             "id": str(pred.game.id),
             "external_id": pred.game.external_id,
-            "date": pred.game.game_date.isoformat(),
+            "date_utc": pred.game.game_date.isoformat(),
+            "date_central": central_time.isoformat(),
+            "date_display": format_game_time_central(pred.game.game_date),
             "away_team": pred.game.away_team,
             "home_team": pred.game.home_team,
             "status": pred.game.status

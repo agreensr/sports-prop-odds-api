@@ -188,43 +188,59 @@ class OddsApiService:
         try:
             client = await self._get_client()
 
-            # Fetch player props for different markets
-            markets = ["player_points", "player_rebounds", "player_assists", "player_threes"]
-            result = {
-                "event_id": event_id,
-                "markets": {}
+            # IMPORTANT: Request ALL player props markets in ONE API call
+            # Using 'markets' (plural) with comma-separated list instead of 'market' (singular)
+            # This prevents the API from returning fallback h2h markets when player props aren't available
+            player_props_markets = "player_points,player_rebounds,player_assists,player_threes"
+
+            params = {
+                "apiKey": self.api_key,
+                "markets": player_props_markets,
+                "regions": "us"
             }
 
-            for market in markets:
-                params = {
-                    "apiKey": self.api_key,
-                    "event": event_id,
-                    "market": market,
-                    "regions": "us"
+            response = await client.get(
+                f"{THE_ODDS_API_BASE}/sports/basketball_nba/events/{event_id}/odds",
+                params=params
+            )
+
+            if response.status_code == 200:
+                data = response.json()
+
+                # Structure the response with markets keyed by market type
+                # The API returns a single game object with all requested markets
+                result = {
+                    "event_id": event_id,
+                    "markets": player_props_markets,
+                    "data": data  # Store the full game response
                 }
 
-                response = await client.get(
-                    f"{THE_ODDS_API_BASE}/sports/basketball_nba/events/{event_id}/odds",
-                    params=params
-                )
+                # Log what markets were actually returned
+                returned_markets = set()
+                for bm in data.get("bookmakers", []):
+                    for market in bm.get("markets", []):
+                        returned_markets.add(market.get("key"))
 
-                if response.status_code == 200:
-                    data = response.json()
-                    result["markets"][market] = data
-                else:
-                    logger.warning(f"Failed to fetch {market} for event {event_id}: {response.status_code}")
-                    result["markets"][market] = []
+                logger.info(f"Fetched player props for event {event_id}: returned markets = {list(returned_markets)}")
 
-            # Cache for 5 minutes (player props change frequently)
-            await self._set_cache(cache_key, result, ttl=300)
+                # Cache for 5 minutes (player props change frequently)
+                await self._set_cache(cache_key, result, ttl=300)
 
-            return result
+                return result
+            else:
+                logger.warning(f"Failed to fetch player props for event {event_id}: {response.status_code}")
+                return {
+                    "event_id": event_id,
+                    "markets": player_props_markets,
+                    "data": {"bookmakers": []}
+                }
 
         except Exception as e:
             logger.error(f"Error fetching NBA player props for event {event_id}: {e}")
             return {
                 "event_id": event_id,
-                "markets": {}
+                "markets": "",
+                "data": {"bookmakers": []}
             }
 
     async def get_quota_status(self) -> Dict:
