@@ -382,7 +382,12 @@ class ParlayService:
         legs: List[Dict],
         correlation_bonus: float = 0.0
     ) -> Optional[Dict]:
-        """Calculate odds, probability, and EV for a parlay."""
+        """
+        Calculate odds, probability, and EV for a parlay.
+
+        Uses odds-implied probabilities adjusted for vigorish, not confidence scores.
+        For parlays: P(A and B) = P(A) × P(B), not average.
+        """
         if not legs:
             return None
 
@@ -400,13 +405,37 @@ class ParlayService:
         parlay_american = self._decimal_to_american(parlay_decimal)
         implied_prob = 1.0 / parlay_decimal
 
-        # Calculate true probability (adjusted for correlation)
-        avg_confidence = sum(leg["confidence"] for leg in legs) / len(legs)
-        true_prob = avg_confidence * (1.0 + correlation_bonus * 0.15)  # Max 15% boost
-        true_prob = min(true_prob, 0.95)  # Cap at 95%
+        # Calculate true probability from odds (accounting for vigorish)
+        # Bookmaker implied probability includes ~5% vigorish
+        VIGORISH_ADJUSTMENT = 0.95
 
-        # EV = (true_prob * parlay_decimal) - 1
-        ev = (true_prob * parlay_decimal) - 1
+        # Individual leg probabilities from odds (adjusted for vigorish)
+        leg_probabilities = []
+        for decimal_odds in leg_decimal_odds:
+            leg_implied_prob = 1.0 / decimal_odds
+            leg_true_prob = leg_implied_prob * VIGORISH_ADJUSTMENT
+            leg_probabilities.append(leg_true_prob)
+
+        # Calculate parlay probability (PRODUCT of individual probabilities)
+        # For independent events: P(A and B) = P(A) × P(B)
+        parlay_prob = 1.0
+        for prob in leg_probabilities:
+            parlay_prob *= prob
+
+        # Apply correlation bonus (correlated legs increase win probability)
+        # Correlation ranges 0.0 to 0.7, so max boost is 35%
+        if correlation_bonus > 0:
+            correlation_multiplier = 1.0 + (correlation_bonus * 0.5)
+            parlay_prob *= correlation_multiplier
+
+        # Cap parlay probability at 90% (conservative cap for correlated events)
+        parlay_prob = min(parlay_prob, 0.90)
+
+        # EV = (true_prob × parlay_decimal) - 1
+        ev = (parlay_prob * parlay_decimal) - 1
+
+        # Average confidence is still useful for display/sorting
+        avg_confidence = sum(leg["confidence"] for leg in legs) / len(legs)
 
         return {
             "legs": legs,
@@ -414,7 +443,7 @@ class ParlayService:
             "calculated_odds": parlay_american,
             "decimal_odds": parlay_decimal,
             "implied_probability": implied_prob,
-            "true_probability": true_prob,
+            "true_probability": parlay_prob,
             "expected_value": ev,
             "confidence_score": avg_confidence,
             "correlation_score": correlation_bonus
