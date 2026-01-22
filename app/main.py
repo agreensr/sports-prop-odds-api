@@ -2,8 +2,10 @@
 Main FastAPI application for NBA Player Prop Prediction API.
 """
 import logging
+import os
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,7 +13,12 @@ from fastapi.responses import JSONResponse
 
 from app.core.config import settings
 from app.core.database import init_db
-from app.api.routes import predictions, players, data, odds, nfl, accuracy
+from app.api.routes import predictions, players, data, odds, nfl, accuracy, parlays, bets, injuries, lineups
+
+# Load environment variables from .env file
+from dotenv import load_dotenv
+env_path = Path(__file__).parent.parent / ".env"
+load_dotenv(dotenv_path=env_path)
 
 # Configure logging
 logging.basicConfig(
@@ -60,6 +67,10 @@ app.include_router(data.router)
 app.include_router(odds.router)
 app.include_router(nfl.router)
 app.include_router(accuracy.router)
+app.include_router(parlays.router)
+app.include_router(bets.router)
+app.include_router(injuries.router)
+app.include_router(lineups.router)
 
 
 @app.get("/")
@@ -75,6 +86,10 @@ async def root():
             "data": "/api/data",
             "odds": "/api/odds",
             "accuracy": "/api/accuracy",
+            "parlays": "/api/parlays",
+            "bets": "/api/bets",
+            "injuries": "/api/injuries",
+            "lineups": "/api/lineups",
             "docs": "/docs",
             "health": "/health"
         }
@@ -95,7 +110,7 @@ async def api_health():
     """Detailed API health check."""
     try:
         from app.core.database import SessionLocal
-        from app.models.models import Player, Game, Prediction
+        from app.models.models import Player, Game, Prediction, PlayerInjury, ExpectedLineup
 
         db = SessionLocal()
 
@@ -103,6 +118,8 @@ async def api_health():
         player_count = db.query(Player).count()
         game_count = db.query(Game).count()
         prediction_count = db.query(Prediction).count()
+        injury_count = db.query(PlayerInjury).count()
+        lineup_count = db.query(ExpectedLineup).count()
 
         db.close()
 
@@ -113,14 +130,20 @@ async def api_health():
                 "status": "connected",
                 "players": player_count,
                 "games": game_count,
-                "predictions": prediction_count
+                "predictions": prediction_count,
+                "injuries": injury_count,
+                "lineups": lineup_count
             },
             "endpoints": {
                 "predictions": "/api/predictions",
                 "players": "/api/players",
                 "data": "/api/data",
                 "odds": "/api/odds",
-                "accuracy": "/api/accuracy"
+                "accuracy": "/api/accuracy",
+                "parlays": "/api/parlays",
+                "bets": "/api/bets",
+                "injuries": "/api/injuries",
+                "lineups": "/api/lineups"
             }
         }
     except Exception as e:
