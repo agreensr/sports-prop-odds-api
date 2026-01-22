@@ -1,45 +1,275 @@
 # NBA Player Prop Prediction API
 
-AI-powered NBA player prop predictions using recent game averages with betting odds integration.
+AI-powered NBA player prop predictions with injury tracking, lineup projections,
+and parlay generation. Official NBA.com data integration with betting odds from bookmakers.
 
 ## Tech Stack
 
 - **Python 3.12** with FastAPI
 - **NBA API** (nba_api) for official NBA.com data
 - **The Odds API** for betting odds from bookmakers
-- **PostgreSQL** for database
-- **Automated cron jobs** for daily data fetching
+- **Firecrawl** for web scraping (Rotowire lineups, injury reports)
+- **PostgreSQL** for database with SQLAlchemy ORM
+- **Automated cron jobs** for data fetching
+
+## Project Features
+
+### Core Features
+- **Player Prop Predictions**: AI-powered predictions for points, rebounds, assists, threes
+- **Injury Tracking**: Real-time injury status from ESPN and NBA official reports
+- **Lineup Projections**: Projected starting lineups and minutes allocations
+- **Parlay Generation**: Same-game and multi-game parlays with corrected EV calculation
+- **Bet Tracking**: Track placed bets and verify results against predictions
+- **Accuracy Tracking**: Monitor prediction accuracy and model performance
+
+### Advanced Features
+- **Per-36 Stats**: Uses actual player efficiency instead of position averages
+- **Minutes-Based Predictions**: `predicted_value = per_36_stat × (projected_minutes / 36)`
+- **Injury-Aware**: Adjusts predictions based on injury status and return progression
+- **Correlation Analysis**: Accounts for stat correlations within parlay legs
+- **Odds Integration**: Real-time odds from FanDuel, DraftKings, etc.
 
 ## Project Structure
 
 ```
 sports-bet-ai-api/
 ├── app/
-│   ├── api/
-│   │   └── routes/
-│   │       ├── predictions.py    # Prediction endpoints
-│   │       ├── players.py        # Player endpoints
-│   │       ├── data.py           # Data fetching endpoints
-│   │       └── odds.py           # Odds endpoints
+│   ├── api/routes/
+│   │   ├── predictions.py      # Prediction endpoints
+│   │   ├── players.py           # Player endpoints
+│   │   ├── odds.py              # Odds endpoints
+│   │   ├── injuries.py          # Injury tracking endpoints
+│   │   ├── lineups.py           # Lineup projection endpoints
+│   │   ├── parlays.py           # Parlay generation endpoints
+│   │   ├── bets.py              # Bet tracking endpoints
+│   │   └── accuracy.py          # Accuracy tracking endpoints
 │   ├── core/
-│   │   └── database.py            # Database session management
-│   ├── ml/
-│   │   ├── features.py            # Feature engineering
-│   │   └── training.py            # Training pipeline
+│   │   └── database.py          # Database session management
 │   ├── models/
-│   │   └── models.py             # SQLAlchemy models (Game, Player, Prediction, PlayerStats, GameOdds)
+│   │   └── models.py             # SQLAlchemy models
 │   ├── services/
 │   │   ├── nba_service.py        # NBA API integration
 │   │   ├── odds_api_service.py   # The Odds API client
-│   │   ├── odds_mapper.py        # Data transformation
-│   │   └── prediction_service.py # Prediction generation
-│   └── main.py                    # FastAPI application
+│   │   ├── prediction_service.py # Prediction generation (injury-aware)
+│   │   ├── injury_service.py    # Injury tracking (ESPN + Firecrawl)
+│   │   ├── lineup_service.py     # Lineup projections (Rotowire)
+│   │   ├── parlay_service.py     # Parlay generation
+│   │   └── bet_tracking_service.py # Bet tracking
+│   ├── utils/
+│   │   └── timezone.py          # Timezone utilities
+│   └── main.py                   # FastAPI application
 ├── scripts/
-│   ├── daily_odds_fetch.py      # Daily automation (7am CST)
-│   ├── automated_stat_import.py # Stat import automation
-│   └── export_training_data.py  # Data export
+│   ├── daily_odds_fetch.py      # Daily odds automation
+│   ├── injury_fetch.py          # Injury data fetching
+│   ├── lineup_fetch.py           # Lineup data fetching
+│   └── resolve_predictions.py    # Result verification
+├── migrations/
+│   ├── 001_add_parlay_tables.sql
+│   ├── 002_add_placed_bets.sql
+│   ├── 003_add_injury_tables.sql
+│   └── 004_add_lineup_tables.sql
 └── models/                         # ML model storage
 ```
+
+## Database Schema
+
+### Core Tables
+
+#### Player
+**Table:** `players`
+
+**Columns:**
+- `id` - Column
+- `external_id` - Column
+- `id_source` - Column
+- `name` - Column
+- `team` - Column
+
+#### Game
+**Table:** `games`
+
+**Columns:**
+- `id` - Column
+- `external_id` - Column
+- `id_source` - Column
+- `game_date` - Column
+- `away_team` - Column
+
+#### Prediction
+**Table:** `predictions`
+
+**Columns:**
+- `id` - Column
+- `player_id` - Column
+- `game_id` - Column
+- `stat_type` - Column
+
+#### NewsEvent
+**Table:** `news_events`
+
+**Columns:**
+- `id` - Column
+- `external_id` - Column
+- `headline` - Column
+- `description` - Column
+- `event_type` - Column
+- `source` - Column
+- `published_at` - Column
+
+#### Parlay
+**Table:** `parlays`
+
+**Columns:**
+- `id` - Column
+- `parlay_type` - Column
+- `calculated_odds` - Column
+- `implied_probability` - Column
+- `expected_value` - Column
+
+#### ParlayLeg
+**Table:** `parlay_legs`
+
+**Columns:**
+- `id` - Column
+- `parlay_id` - Column
+- `prediction_id` - Column
+- `leg_order` - Column
+- `selection` - Column
+
+#### PlacedBet
+**Table:** `placed_bets`
+
+**Columns:**
+- `id` - Column
+- `sportsbook` - Column
+- `bet_id` - Column
+- `bet_type` - Column
+
+#### PlacedBetLeg
+**Table:** `placed_bet_legs`
+
+**Columns:**
+- `id` - Column
+- `bet_id` - Column
+- `player_name` - Column
+- `player_team` - Column
+- `stat_type` - Column
+
+#### PlayerInjury
+**Table:** `player_injuries`
+
+**Columns:**
+- `id` - Column
+- `player_id` - Column
+- `game_id` - Column
+- `injury_type` - Column
+
+#### ExpectedLineup
+**Table:** `expected_lineups`
+
+**Columns:**
+- `id` - Column
+- `game_id` - Column
+- `team` - Column
+- `player_id` - Column
+
+### Service Layer
+
+| Service | Purpose |
+|---------|---------|
+| PredictionService | Injury-aware predictions using per-36 stats |
+| InjuryService | ESPN + Firecrawl injury data fetching |
+| LineupService | Rotowire lineup projections |
+| ParlayService | Parlay generation with corrected EV calculation |
+| BetTrackingService | Track and verify placed bets |
+| OddsApiService | The Odds API integration |
+| NBAService | Official NBA.com data |
+
+## API Endpoints
+
+### Predictions
+- `GET /api/predictions/player/{player_id}`
+- `GET /api/predictions/player/nba/{nba_id}`
+- `GET /api/predictions/game/{game_id}`
+- `GET /api/predictions/game/nba/{nba_game_id}`
+- `GET /api/predictions/top`
+- `GET /api/predictions/recent`
+- `GET /api/predictions/stat-types`
+- `POST /api/predictions/generate/upcoming`
+- `GET /api/nfl/predictions/player/{player_id}`
+- `GET /api/nfl/predictions/top`
+
+### Players
+- `GET /api/players/search`
+- `GET /api/players/{player_id}`
+- `GET /api/players/nba/{nba_id}`
+- `GET /api/players/nba/{nba_id}/predictions`
+- `GET /api/players/`
+- `GET /api/players/teams/list`
+
+### Odds
+- `GET /api/odds/quota`
+- `POST /api/odds/fetch/game-odds`
+- `POST /api/odds/fetch/player-props/{game_id}`
+- `GET /api/odds/game/{game_id}`
+
+### Injuries
+- `GET /api/injuries/`
+- `GET /api/injuries/player/{player_id}`
+- `GET /api/injuries/context/{player_id}`
+- `POST /api/injuries/fetch`
+- `GET /api/injuries/stats/summary`
+
+### Lineups
+- `GET /api/lineups/game/{game_id}`
+- `GET /api/lineups/player/{player_id}`
+- `GET /api/lineups/player/{player_id}/minutes`
+- `POST /api/lineups/fetch`
+- `GET /api/lineups/team/{team}`
+- `GET /api/lineups/stats/summary`
+
+### Parlays
+- `POST /api/parlays/generate/same-game/{game_id}`
+- `POST /api/parlays/generate/multi-game`
+- `GET /api/parlays/`
+- `GET /api/parlays/top-ev`
+- `GET /api/parlays/{parlay_id}`
+- `GET /api/parlays/game/{game_id}`
+- `DELETE /api/parlays/cleanup`
+- `GET /api/parlays/stats/summary`
+
+### Bets
+- `POST /api/bets/`
+- `GET /api/bets/`
+- `GET /api/bets/summary`
+- `GET /api/bets/{bet_id}`
+- `PUT /api/bets/{bet_id}/result`
+
+### Data
+- `POST /api/nfl/data/fetch/players`
+- `GET /api/nfl/data/status`
+- `POST /api/data/fetch/upcoming`
+- `POST /api/data/fetch/from-odds`
+- `POST /api/data/fetch/players`
+- `GET /api/data/status`
+- `POST /api/data/clear-cache`
+- `POST /api/data/fetch/single-game/{nba_game_id}`
+
+### Accuracy
+- `GET /api/accuracy/overall`
+- `GET /api/accuracy/by-stat-type`
+- `GET /api/accuracy/timeline`
+- `GET /api/accuracy/drift-check`
+- `GET /api/accuracy/best-worst`
+- `GET /api/accuracy/by-player`
+- `GET /api/accuracy/resolution-status`
+- `GET /api/accuracy/unresolved-games`
+- `POST /api/accuracy/resolve/{game_id}`
+- `POST /api/accuracy/resolve-recent`
+
+### Health
+- `GET /api/nfl/health`
+
 
 ## VPS Setup
 
@@ -51,68 +281,12 @@ cd /opt/sports-bet-ai-api
 
 ### Environment Variables
 Edit `.env` file:
-```
+```bash
 THE_ODDS_API_KEY=your_api_key_here
 DATABASE_URL=postgresql://postgres:password@localhost:5432/sports_betting
 LOG_LEVEL=INFO
+FIRECRAWL_API_KEY=your_key_here  # Optional, for Firecrawl
 ```
-
-## Automated Systems
-
-### Daily Odds Fetch (7:00 AM CST)
-
-Automated script that:
-1. Fetches upcoming games from The Odds API (next 2-3 days)
-2. Generates predictions for games without them
-3. Fetches player props odds for games within 2 hours of start
-
-**Cron Schedule:**
-```bash
-# Runs daily at 7:00 AM CST (1:00 PM UTC)
-0 13 * * * cd /opt/sports-bet-ai-api && source venv/bin/activate && python scripts/daily_odds_fetch.py
-```
-
-**API Usage:** ~20 requests/day (well within 1500 request free tier)
-
-### Stat Import Automation
-
-**Cron Jobs:**
-```bash
-# Daily stat import at 6 AM UTC (previous day's games)
-0 6 * * * cd /opt/sports-bet-ai-api && source venv/bin/activate && python scripts/automated_stat_import.py --daily
-
-# Weekly roster update (Sundays at 7 AM UTC)
-0 7 * * 0 cd /opt/sports-bet-ai-api && source venv/bin/activate && python scripts/automated_stat_import.py --roster --limit 500
-
-# Recent game logs refresh (Tuesdays at 8 AM UTC)
-0 8 * * 2 cd /opt/sports-bet-ai-api && source venv/bin/activate && python scripts/automated_stat_import.py --recent 7 --limit 200
-```
-
-## Data Sources
-
-### NBA API (nba_api)
-- **Purpose:** Official NBA.com data (players, games, stats)
-- **Usage:** Player rosters, game schedules, box scores
-- **Rate Limit:** Can be strict with 30s timeouts
-
-### The Odds API
-- **Purpose:** Betting odds from bookmakers
-- **Bookmakers:** FanDuel, DraftKings, BetRivers, PointsBet, Unibet
-- **Player Props:** points, rebounds, assists, threes
-- **Free Tier:** 500 requests/month (~16/day)
-
-**Important Notes:**
-- The Odds API has a 10-minute offset bug - corrected automatically
-- Player props only posted 12-24 hours before game time
-- Odds fetched within 2 hours of game start to ensure availability
-
-## Bookmaker Priority
-
-1. FanDuel (highest priority)
-2. DraftKings
-3. BetRivers
-4. PointsBet
-5. Unibet
 
 ## Running the API
 
@@ -130,72 +304,66 @@ export THE_ODDS_API_KEY=your_key
 uvicorn app.main:app --host 0.0.0.0 --port 8001
 ```
 
-## API Endpoints
+## Automated Systems
 
-### Predictions
-- `POST /api/predictions/generate` - Generate predictions for a game
-- `GET /api/predictions/game/{game_id}` - Get predictions for a game
-- `GET /api/predictions/player/nba/{nba_id}` - Get predictions by NBA ID
-- `GET /api/predictions/with-odds` - Get predictions with odds pricing
+### Daily Odds Fetch (7:00 AM CST)
+```bash
+# Runs daily at 7:00 AM CST (1:00 PM UTC)
+0 13 * * * cd /opt/sports-bet-ai-api && source venv/bin/activate && python scripts/daily_odds_fetch.py
+```
 
-### Data
-- `POST /api/data/fetch/upcoming` - Fetch upcoming games from NBA API
-- `POST /api/data/fetch/from-odds` - Fetch games from The Odds API
-- `GET /api/data/status` - Get system status
+### Injury Data Fetch (Every 2 hours)
+```bash
+# Even hours: 0, 2, 4, ...
+0 */2 * * * cd /opt/sports-bet-ai-api && source venv/bin/activate && python scripts/injury_fetch.py
+```
 
-### Odds
-- `POST /api/odds/fetch/game-odds` - Fetch game odds (moneyline, spread, totals)
-- `POST /api/odds/fetch/player-props/{game_id}` - Fetch player props for a game
-- `POST /api/odds/predictions/update-odds` - Update predictions with odds
-- `GET /api/odds/quota` - Check remaining API quota
+### Lineup Data Fetch (Every 4 hours)
+```bash
+# Every 4 hours: 0, 4, 8, ...
+0 */4 * * * cd /opt/sports-bet-ai-api && source venv/bin/activate && python scripts/lineup_fetch.py
+```
 
-### Health Check
-- `GET /api/health` - System health and statistics
+## Data Sources
 
-## Prediction Model
+| Source | Purpose | Rate Limit |
+|--------|---------|------------|
+| NBA API (nba_api) | Official NBA.com data | Can be strict with timeouts |
+| The Odds API | Betting odds from bookmakers | 500 req/month free tier |
+| ESPN API | Injury news and updates | ~1 req/sec recommended |
+| Firecrawl | Web scraping (lineups, injuries) | Self-hosted |
 
-**Current Approach:** Recent game averages with position-based fallback
+## Bookmaker Priority
 
-- **Primary:** Average of last 10 games (minimum 3 games required)
-- **Fallback:** Position-based averages (PG, SG, SF, PF, C)
-- **Variation:** ±3% on recent averages for realism
+1. FanDuel (highest priority)
+2. DraftKings
+3. BetRivers
+4. PointsBet
+5. Unibet
 
-**Model Versions:**
-- `recent_avg_v2.0` - Actual recent stats
-- `position_average_v1.0` - Position fallback
+## Recent Features
 
-## Database Schema
+### Injury & Lineup Tracking (v2.1)
+- Real-time injury status tracking from ESPN and NBA official reports
+- Projected starting lineups from Rotowire
+- Minutes projections for accurate predictions
+- Injury-aware predictions that adjust for return-to-play status
 
-### Games Table
-- `id` - Internal UUID
-- `external_id` - NBA.com or Odds API game ID
-- `id_source` - Data source (nba, odds_api)
-- `game_date` - Game time (UTC)
-- `away_team`, `home_team` - 3-letter abbreviations
-- `season` - NBA season year
-- `status` - scheduled, in_progress, final
+### Parlay System (v2.2)
+- Same-game and multi-game parlay generation
+- Corrected EV calculation using odds-based probabilities
+- Correlation analysis for parlay legs
+- Multi-bookmaker parlay support
 
-### Players Table
-- `id` - Internal UUID
-- `external_id` - NBA.com player ID
-- `name` - Full name
-- `team` - 3-letter abbreviation
-- `position` - PG, SG, SF, PF, C, G, F
-- `active` - Boolean
+### Bet Tracking (v2.3)
+- Track placed bets from FanDuel, DraftKings, etc.
+- Result verification against predictions
+- Profit/loss tracking
+- Bet history and analytics
 
-### Predictions Table
-- `predicted_value` - AI prediction
-- `bookmaker_line` - Bookmaker over/under line
-- `bookmaker_name` - FanDuel, DraftKings, etc.
-- `over_price`, `under_price` - American odds
-- `confidence` - Confidence score (0.35-0.75)
-- `recommendation` - OVER, UNDER, or NONE
+## API Documentation
 
-## Time Zone Notes
-
-- **Database Storage:** UTC
-- **Display:** Central Time (CST, UTC-6)
-- **The Odds API Correction:** -10 minutes applied to fix API bug
+Full API documentation available at: http://89.117.150.95:8001/docs
 
 ## License
 
