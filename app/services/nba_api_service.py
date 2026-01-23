@@ -16,6 +16,7 @@ Data Flow:
 """
 import asyncio
 import logging
+import time
 from datetime import date, datetime, timedelta
 from typing import List, Dict, Optional
 from sqlalchemy.orm import Session
@@ -27,6 +28,11 @@ logger = logging.getLogger(__name__)
 
 # Default season (adjust based on current date)
 DEFAULT_SEASON = "2025-26"
+
+# Rate limiting settings
+REQUEST_DELAY_SECONDS = 1.0  # Delay between requests to avoid rate limiting
+MAX_RETRIES = 3  # Maximum number of retries for timeout errors
+RETRY_DELAY_SECONDS = 2.0  # Initial retry delay (doubles each retry)
 
 
 class NbaApiService:
@@ -73,16 +79,18 @@ class NbaApiService:
     async def get_player_game_logs(
         self,
         player_nba_api_id: int,
-        games_limit: int = 20,
-        season: str = DEFAULT_SEASON
+        games_limit: int = 50,
+        season: str = DEFAULT_SEASON,
+        retries: int = 0
     ) -> Optional[List[Dict]]:
         """
-        Fetch player game logs from nba_api.
+        Fetch player game logs from nba_api with retry logic and delays.
 
         Args:
             player_nba_api_id: Player's nba_api numeric ID (nba_api_id in our DB)
-            games_limit: Number of recent games to fetch (default: 20)
-            season: NBA season (default: 2024-25)
+            games_limit: Number of recent games to fetch (default: 50)
+            season: NBA season (default: 2025-26)
+            retries: Current retry count (for internal use)
 
         Returns:
             List of game log dictionaries or None if fetch fails
@@ -91,11 +99,11 @@ class NbaApiService:
             logger.error("nba_api package not available")
             return None
 
+        # Add delay before request to avoid rate limiting
+        await asyncio.sleep(REQUEST_DELAY_SECONDS)
+
         try:
             from nba_api.stats.endpoints import playergamelog
-
-            # Convert season format (2024-25 -> 2024-25)
-            # nba_api expects "2024-25" format
 
             # Fetch game logs using numeric nba_api_id
             gamelog = playergamelog.PlayerGameLog(
@@ -126,12 +134,30 @@ class NbaApiService:
                     'threes': row.get('FG3M', 0),
                 })
 
-            logger.info(f"Fetched {len(games)} game logs for nba_api_id {player_nba_api_id}")
+            logger.debug(f"Fetched {len(games)} game logs for nba_api_id {player_nba_api_id}")
             return games
 
         except Exception as e:
-            logger.error(f"Error fetching game logs for nba_api_id {player_nba_api_id}: {e}")
-            return None
+            error_str = str(e)
+            # Check if it's a timeout error (retryable)
+            is_timeout = 'timeout' in error_str.lower() or 'timed out' in error_str.lower()
+
+            if is_timeout and retries < MAX_RETRIES:
+                retry_delay = RETRY_DELAY_SECONDS * (2 ** retries)  # Exponential backoff
+                logger.warning(
+                    f"Timeout error for nba_api_id {player_nba_api_id} "
+                    f"(attempt {retries + 1}/{MAX_RETRIES}), retrying in {retry_delay}s..."
+                )
+                await asyncio.sleep(retry_delay)
+                return await self.get_player_game_logs(
+                    player_nba_api_id=player_nba_api_id,
+                    games_limit=games_limit,
+                    season=season,
+                    retries=retries + 1
+                )
+            else:
+                logger.error(f"Error fetching game logs for nba_api_id {player_nba_api_id}: {e}")
+                return None
 
     def _parse_minutes(self, min_str) -> float:
         """
@@ -263,7 +289,7 @@ class NbaApiService:
         if player:
             self._cache_season_stats(player.id, season, stats)
 
-        logger.info(f"Calculated per-36 stats for nba_api_id {player_nba_api_id}: {stats}")
+        logger.debug(f"Calculated per-36 stats for nba_api_id {player_nba_api_id}: {stats}")
         return stats
 
     def _cache_season_stats(self, player_id: str, season: str, stats: Dict) -> None:
