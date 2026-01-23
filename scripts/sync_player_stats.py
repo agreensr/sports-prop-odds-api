@@ -36,8 +36,8 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Default season
-DEFAULT_SEASON = "2024-25"
-DEFAULT_GAMES_LIMIT = 20
+DEFAULT_SEASON = "2025-26"
+DEFAULT_GAMES_LIMIT = 50
 
 
 async def sync_player_stats(

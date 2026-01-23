@@ -26,7 +26,7 @@ from app.models.models import Player, PlayerSeasonStats
 logger = logging.getLogger(__name__)
 
 # Default season (adjust based on current date)
-DEFAULT_SEASON = "2024-25"
+DEFAULT_SEASON = "2025-26"
 
 
 class NbaApiService:
@@ -171,7 +171,7 @@ class NbaApiService:
     async def get_player_season_averages(
         self,
         player_nba_api_id: int,
-        games_limit: int = 15,
+        games_limit: int = 50,
         season: str = DEFAULT_SEASON
     ) -> Optional[Dict]:
         """
@@ -390,7 +390,7 @@ class NbaApiService:
 
     async def sync_all_active_players(
         self,
-        games_limit: int = 20,
+        games_limit: int = 50,
         season: str = DEFAULT_SEASON
     ) -> Dict[str, int]:
         """
