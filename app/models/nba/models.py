@@ -408,7 +408,7 @@ class PlayerSeasonStats(Base):
 
 
 class HistoricalOddsSnapshot(Base):
-    """Historical bookmaker odds snapshots for hit rate calculation.
+    """Historical bookmaker odds snapshots for hit rate calculation and value detection.
 
     This table captures point-in-time player prop odds from bookmakers,
     then resolves them against actual game results to calculate hit rates.
@@ -418,6 +418,11 @@ class HistoricalOddsSnapshot(Base):
 
     Example: If LeBron James has hit his assist OVER in 8 of 10 games,
     future assist predictions get a confidence boost.
+
+    Opening Odds Tracking:
+    - is_opening_line: TRUE for the first odds captured (opening line)
+    - line_movement: Difference from opening (current_line - opening_line)
+    - Value is found when line moves but prediction remains stable
     """
     __tablename__ = "historical_odds_snapshots"
 
@@ -434,6 +439,10 @@ class HistoricalOddsSnapshot(Base):
 
     # Snapshot timing
     snapshot_time = Column(DateTime, nullable=False, index=True)  # When odds were captured
+
+    # Opening odds tracking
+    is_opening_line = Column(Boolean, default=False, nullable=False, index=True)  # TRUE if first snapshot
+    line_movement = Column(Float, default=0.0, nullable=False)  # Current line - opening line
 
     # Starter filtering
     was_starter = Column(Boolean, default=False, nullable=False, index=True)
@@ -454,4 +463,5 @@ class HistoricalOddsSnapshot(Base):
         Index('ix_historical_odds_player_stat', 'player_id', 'stat_type'),
         Index('ix_historical_odds_bookmaker', 'bookmaker_name'),
         Index('ix_historical_odds_hit_result', 'hit_result'),
+        Index('ix_historical_odds_opening_comparison', 'game_id', 'player_id', 'stat_type', 'bookmaker_name', 'snapshot_time'),
     )

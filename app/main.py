@@ -14,7 +14,7 @@ from fastapi.responses import JSONResponse
 from app.core.config import settings
 from app.core.database import init_db
 # Sport-specific routes
-from app.api.routes.nba import predictions as nba_predictions, players as nba_players, data as nba_data, odds as nba_odds, injuries as nba_injuries, lineups as nba_lineups, parlays as nba_parlays, historical_odds as nba_historical_odds
+from app.api.routes.nba import predictions as nba_predictions, players as nba_players, data as nba_data, odds as nba_odds, injuries as nba_injuries, lineups as nba_lineups, parlays as nba_parlays, historical_odds as nba_historical_odds, opening_odds as nba_opening_odds, minutes_projection as nba_minutes_projection
 from app.api.routes.nfl import predictions as nfl_predictions
 # Shared routes
 from app.api.routes.shared import accuracy, bets
@@ -104,6 +104,8 @@ app.include_router(nba_injuries.router, prefix="/api/nba")
 app.include_router(nba_lineups.router, prefix="/api/nba")
 app.include_router(nba_parlays.router, prefix="/api/nba")
 app.include_router(nba_historical_odds.router, prefix="/api/nba")
+app.include_router(nba_opening_odds.router, prefix="/api/nba")
+app.include_router(nba_minutes_projection.router, prefix="/api/nba")
 # NFL routes
 app.include_router(nfl_predictions.router, prefix="/api/nfl")
 # Shared routes (sport-agnostic) - these keep their own prefixes
