@@ -377,7 +377,7 @@ async def get_top_predictions(
     from app.utils.timezone import CENTRAL_TIME_OFFSET
 
     # Get current time in Central Time
-    now_utc = datetime.now(timezone.utc)
+    now_utc = datetime.now(UTC)
     now_central = now_utc + CENTRAL_TIME_OFFSET
     # Convert to naive datetime for easier manipulation
     now_central_naive = now_central.replace(tzinfo=None)

@@ -8,7 +8,7 @@ Calculates prediction accuracy metrics including:
 - Model Drift Detection: Compares recent performance to baseline
 """
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 from typing import Dict, List, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_, case, literal_column, cast, Date, extract
@@ -62,7 +62,7 @@ class AccuracyService:
             - correct_over: Correct OVER recommendations
             - correct_under: Correct UNDER recommendations
         """
-        cutoff = datetime.now(timezone.utc) - timedelta(days=days_back)
+        cutoff = datetime.now(UTC) - timedelta(days=days_back)
 
         # Base query - resolved predictions within date range
         base_query = self.db.query(Prediction).filter(
@@ -168,7 +168,7 @@ class AccuracyService:
         Returns:
             List of dictionaries, one per stat type, with metrics
         """
-        cutoff = datetime.now(timezone.utc) - timedelta(days=days_back)
+        cutoff = datetime.now(UTC) - timedelta(days=days_back)
 
         # Group by stat_type
         query = self.db.query(
@@ -249,7 +249,7 @@ class AccuracyService:
             List of time-ordered dictionaries with metrics for each window
         """
         timeline = []
-        cutoff = datetime.now(timezone.utc) - timedelta(days=days_back)
+        cutoff = datetime.now(UTC) - timedelta(days=days_back)
 
         # Calculate number of windows
         num_windows = days_back // window_days
@@ -342,14 +342,14 @@ class AccuracyService:
             - alerts: List of alert messages if drift detected
         """
         # Calculate baseline metrics
-        baseline_cutoff = datetime.now(timezone.utc) - timedelta(days=baseline_days)
-        recent_cutoff = datetime.now(timezone.utc) - timedelta(days=recent_days)
+        baseline_cutoff = datetime.now(UTC) - timedelta(days=baseline_days)
+        recent_cutoff = datetime.now(UTC) - timedelta(days=recent_days)
 
         # Baseline period
         baseline_query = self.db.query(Prediction).filter(
             Prediction.actuals_resolved_at.isnot(None),
             Prediction.created_at >= baseline_cutoff,
-            Prediction.created_at >= datetime.now(timezone.utc) - timedelta(days=baseline_days + recent_days),
+            Prediction.created_at >= datetime.now(UTC) - timedelta(days=baseline_days + recent_days),
             Prediction.created_at < recent_cutoff
         )
 
@@ -490,7 +490,7 @@ class AccuracyService:
         Returns:
             Dictionary with best and worst predictions
         """
-        cutoff = datetime.now(timezone.utc) - timedelta(days=days_back)
+        cutoff = datetime.now(UTC) - timedelta(days=days_back)
 
         query = self.db.query(
             Prediction,
@@ -551,7 +551,7 @@ class AccuracyService:
         Returns:
             List of player accuracy metrics
         """
-        cutoff = datetime.now(timezone.utc) - timedelta(days=days_back)
+        cutoff = datetime.now(UTC) - timedelta(days=days_back)
 
         # Group by player
         query = self.db.query(

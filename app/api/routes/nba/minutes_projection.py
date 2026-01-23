@@ -17,11 +17,12 @@ New: Starter, back-to-back, high foul risk → 26.2 minutes
 """
 import logging
 from typing import List, Optional, Dict
-from datetime import datetime
+from datetime import datetime, UTC
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+from sqlalchemy import and_
 
 from app.core.database import get_db
 from app.models.nba.models import Game, Player, ExpectedLineup
@@ -439,14 +440,14 @@ async def analyze_upcoming_minutes(
 
     from datetime import timedelta
 
-    cutoff_time = datetime.now(datetime.UTC) + timedelta(hours=hours_ahead)
+    cutoff_time = datetime.now(UTC) + timedelta(hours=hours_ahead)
 
     # Get upcoming games
     games = db.query(Game).filter(
         and_(
             Game.status == 'scheduled',
             Game.game_date <= cutoff_time,
-            Game.game_date >= datetime.now(datetime.UTC)
+            Game.game_date >= datetime.now(UTC)
         )
     ).order_by(Game.game_date).limit(10).all()
 

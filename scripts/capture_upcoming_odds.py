@@ -89,7 +89,7 @@ async def main():
     service = HistoricalOddsService(db)
 
     try:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         start_window = now
         end_window = now + timedelta(hours=args.hours_ahead)
 

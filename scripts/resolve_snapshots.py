@@ -24,7 +24,7 @@ Process:
 import logging
 import os
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 from pathlib import Path
 
 # Add project root to path
@@ -93,7 +93,7 @@ def main():
             logger.info(f"Processing specific game: {game.away_team} @ {game.home_team}")
         else:
             # Find completed games with unresolved snapshots
-            cutoff = datetime.now(timezone.utc) - timedelta(hours=args.hours_back)
+            cutoff = datetime.now(UTC) - timedelta(hours=args.hours_back)
 
             # Subquery: find games with unresolved snapshots
             games_with_unresolved = db.query(

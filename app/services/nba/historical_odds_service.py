@@ -20,7 +20,7 @@ import asyncio
 import logging
 import os
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 from typing import Dict, List, Optional
 
 from sqlalchemy.orm import Session
@@ -99,9 +99,9 @@ class HistoricalOddsService:
                 bookmaker_line=bookmaker_line,
                 over_price=over_price,
                 under_price=under_price,
-                snapshot_time=snapshot_time or datetime.now(timezone.utc),
+                snapshot_time=snapshot_time or datetime.now(UTC),
                 was_starter=was_starter,
-                created_at=datetime.now(timezone.utc)
+                created_at=datetime.now(UTC)
             )
 
             self.db.add(snapshot)
@@ -326,7 +326,7 @@ class HistoricalOddsService:
                 # Update snapshot
                 snapshot.actual_value = actual_value
                 snapshot.hit_result = hit_result
-                snapshot.resolved_at = datetime.now(timezone.utc)
+                snapshot.resolved_at = datetime.now(UTC)
 
                 resolved_count += 1
 
@@ -399,7 +399,7 @@ class HistoricalOddsService:
             query = query.filter(HistoricalOddsSnapshot.bookmaker_name == bookmaker_name)
 
         # Calculate cutoff date (approximately games_back * 2 days to account for schedule)
-        cutoff_date = datetime.now(timezone.utc) - timedelta(days=games_back * 2)
+        cutoff_date = datetime.now(UTC) - timedelta(days=games_back * 2)
         query = query.filter(HistoricalOddsSnapshot.snapshot_time >= cutoff_date)
 
         # Order by snapshot time descending and limit

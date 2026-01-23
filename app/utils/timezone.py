@@ -6,7 +6,7 @@ Game times are stored in UTC and converted to Central for display.
 
 NBA.com provides game times in Eastern Time (ET/EDT).
 """
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone, timedelta, UTC
 from typing import Tuple, Optional
 
 # Central Time is UTC-6 (standard) or UTC-5 (daylight saving)
@@ -127,7 +127,7 @@ def is_game_completed(game_date_utc: datetime, status: str) -> bool:
     if game_date_utc.tzinfo is None:
         game_date_utc = game_date_utc.replace(tzinfo=timezone.utc)
 
-    cutoff = datetime.now(timezone.utc) - timedelta(hours=6)
+    cutoff = datetime.now(UTC) - timedelta(hours=6)
     return game_date_utc < cutoff
 
 

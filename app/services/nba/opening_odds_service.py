@@ -23,7 +23,7 @@ Data Flow:
 """
 import logging
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 from typing import Dict, List, Optional, Tuple
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, desc, func
@@ -106,11 +106,11 @@ class OpeningOddsService:
             bookmaker_line=bookmaker_line,
             over_price=over_price,
             under_price=under_price,
-            snapshot_time=snapshot_time or datetime.now(datetime.UTC),
+            snapshot_time=snapshot_time or datetime.now(UTC),
             is_opening_line=True,
             line_movement=0.0,  # Opening line has no movement yet
             was_starter=was_starter,
-            created_at=datetime.now(datetime.UTC)
+            created_at=datetime.now(UTC)
         )
 
         self.db.add(snapshot)

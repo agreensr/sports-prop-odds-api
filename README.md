@@ -9,7 +9,7 @@ This codebase uses a **sport-specific directory structure** to support multiple 
 
 ## Tech Stack
 
-- **Python 3.12** with FastAPI
+- **Python 3.11+** with FastAPI (modern `datetime.UTC` syntax)
 - **NBA API** (nba_api) for official NBA.com data
 - **The Odds API** for betting odds from bookmakers
 - **Firecrawl** for web scraping (Rotowire lineups, injury reports)

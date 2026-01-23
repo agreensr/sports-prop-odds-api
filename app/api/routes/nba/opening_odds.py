@@ -12,14 +12,15 @@ Key Endpoints:
 """
 import logging
 from typing import List, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 
 from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+from sqlalchemy import and_
 
 from app.core.database import get_db
-from app.models.nba.models import Game
+from app.models.nba.models import Game, HistoricalOddsSnapshot, Player
 from app.services.nba.opening_odds_service import OpeningOddsService
 
 logger = logging.getLogger(__name__)
@@ -117,7 +118,7 @@ async def find_value_opportunities(
         raise HTTPException(status_code=404, detail="Game not found")
 
     # Check if game is in the appropriate time window
-    hours_until_game = (game.game_date - datetime.now(datetime.UTC)).total_seconds() / 3600
+    hours_until_game = (game.game_date - datetime.now(UTC)).total_seconds() / 3600
     if hours_until_game > hours_before_game:
         raise HTTPException(
             status_code=400,
@@ -200,13 +201,13 @@ async def list_games_with_opening_odds(
     """
     from app.models.nba.models import HistoricalOddsSnapshot
 
-    cutoff_time = datetime.now(datetime.UTC) + timedelta(hours=hours_ahead)
+    cutoff_time = datetime.now(UTC) + timedelta(hours=hours_ahead)
 
     games = db.query(Game).filter(
         and_(
             Game.status == 'scheduled',
             Game.game_date <= cutoff_time,
-            Game.game_date >= datetime.now(datetime.UTC)
+            Game.game_date >= datetime.now(UTC)
         )
     ).order_by(Game.game_date).all()
 
@@ -331,7 +332,7 @@ async def get_top_line_movements(
     """
     from sqlalchemy import desc, and_
 
-    cutoff_time = datetime.now(datetime.UTC) + timedelta(hours=hours_ahead)
+    cutoff_time = datetime.now(UTC) + timedelta(hours=hours_ahead)
 
     # Get all snapshots with line movement data
     query = db.query(
@@ -350,7 +351,7 @@ async def get_top_line_movements(
         and_(
             Game.status == 'scheduled',
             Game.game_date <= cutoff_time,
-            Game.game_date >= datetime.now(datetime.UTC),
+            Game.game_date >= datetime.now(UTC),
             HistoricalOddsSnapshot.line_movement != 0
         )
     )

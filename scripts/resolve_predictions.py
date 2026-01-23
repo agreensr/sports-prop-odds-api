@@ -27,7 +27,7 @@ import asyncio
 import logging
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 # Add project root to path
@@ -280,7 +280,7 @@ async def main():
 
     logger.info("=" * 60)
     logger.info("Backfill Resolution Script")
-    logger.info(f"Started at: {datetime.now(timezone.utc).isoformat()}")
+    logger.info(f"Started at: {datetime.now(UTC).isoformat()}")
     logger.info("=" * 60)
 
     try:
@@ -293,7 +293,7 @@ async def main():
 
         logger.info("\n" + "=" * 60)
         logger.info("Script completed successfully")
-        logger.info(f"Finished at: {datetime.now(timezone.utc).isoformat()}")
+        logger.info(f"Finished at: {datetime.now(UTC).isoformat()}")
         logger.info("=" * 60)
 
     except Exception as e:

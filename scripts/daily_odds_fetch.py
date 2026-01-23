@@ -13,7 +13,7 @@ import asyncio
 import logging
 import os
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 from pathlib import Path
 
 # Add project root to path
@@ -105,7 +105,7 @@ class DailyOddsFetchService:
             logger.info(f"Found {len(games_data)} games from The Odds API")
 
             # Filter games within 48 hours
-            cutoff = datetime.now(timezone.utc) + timedelta(hours=FETCH_HOURS_AHEAD)
+            cutoff = datetime.now(UTC) + timedelta(hours=FETCH_HOURS_AHEAD)
             games_to_process = []
 
             for game_data in games_data:
@@ -170,8 +170,8 @@ class DailyOddsFetchService:
 
         try:
             # Get games within 48 hours that don't have predictions
-            cutoff = datetime.now(timezone.utc) + timedelta(hours=FETCH_HOURS_AHEAD)
-            start = datetime.now(timezone.utc)
+            cutoff = datetime.now(UTC) + timedelta(hours=FETCH_HOURS_AHEAD)
+            start = datetime.now(UTC)
 
             games = self.db.query(Game).filter(
                 Game.game_date >= start,
@@ -215,7 +215,7 @@ class DailyOddsFetchService:
             mapper = OddsMapper(self.db)
 
             # Get games with predictions - only those within 2 hours of start
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             start_window = now - timedelta(hours=1)  # Started within last hour
             end_window = now + timedelta(hours=PLAYER_PROPS_HOURS_BEFORE)  # Starting within 2 hours
 

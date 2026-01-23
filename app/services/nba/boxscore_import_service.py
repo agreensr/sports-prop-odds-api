@@ -9,7 +9,7 @@ Resolves predictions with actual game results by:
 """
 import logging
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 from typing import Dict, List, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
@@ -86,7 +86,7 @@ class BoxscoreImportService:
         }
 
         # Calculate time window
-        cutoff = datetime.now(timezone.utc) - timedelta(hours=hours_back)
+        cutoff = datetime.now(UTC) - timedelta(hours=hours_back)
 
         try:
             # Find completed games without resolved predictions
@@ -103,7 +103,7 @@ class BoxscoreImportService:
                 recently_resolved = self.db.query(Prediction).filter(
                     Prediction.game_id == game.id,
                     Prediction.actuals_resolved_at.isnot(None),
-                    Prediction.actuals_resolved_at >= datetime.now(timezone.utc) - timedelta(hours=1)
+                    Prediction.actuals_resolved_at >= datetime.now(UTC) - timedelta(hours=1)
                 ).first()
 
                 if not recently_resolved:
@@ -263,7 +263,7 @@ class BoxscoreImportService:
                     setattr(player_stats, stat_field, actual_value)
                     if boxscore_stats.get('MIN') is not None:
                         player_stats.minutes = boxscore_stats.get('MIN')
-                    player_stats.updated_at = datetime.now(timezone.utc)
+                    player_stats.updated_at = datetime.now(UTC)
                     result["player_stats_updated"] += 1
                 else:
                     # Create new stats record
@@ -276,8 +276,8 @@ class BoxscoreImportService:
                         assists=boxscore_stats.get('AST'),
                         threes=boxscore_stats.get('FG3M'),
                         minutes=boxscore_stats.get('MIN'),
-                        created_at=datetime.now(timezone.utc),
-                        updated_at=datetime.now(timezone.utc)
+                        created_at=datetime.now(UTC),
+                        updated_at=datetime.now(UTC)
                     )
                     if not dry_run:
                         self.db.add(player_stats)
@@ -298,7 +298,7 @@ class BoxscoreImportService:
                 prediction.actual_value = actual_value
                 prediction.difference = difference
                 prediction.was_correct = was_correct
-                prediction.actuals_resolved_at = datetime.now(timezone.utc)
+                prediction.actuals_resolved_at = datetime.now(UTC)
 
                 result["predictions_resolved"] += 1
 
@@ -324,7 +324,7 @@ class BoxscoreImportService:
         Returns:
             List of game dictionaries
         """
-        cutoff = datetime.now(timezone.utc) - timedelta(hours=hours_back)
+        cutoff = datetime.now(UTC) - timedelta(hours=hours_back)
 
         games = self.db.query(Game).filter(
             Game.status == "final",
