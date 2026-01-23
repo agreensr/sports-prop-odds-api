@@ -27,7 +27,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from app.core.database import SessionLocal
-from app.models.models import Player
+from app.models.nba.models import Player
 
 # Configure logging
 logging.basicConfig(

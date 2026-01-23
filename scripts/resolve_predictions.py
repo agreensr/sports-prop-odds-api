@@ -34,7 +34,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from app.core.database import SessionLocal
-from app.services.boxscore_import_service import BoxscoreImportService
+from app.services.nba.boxscore_import_service import BoxscoreImportService
 
 # Setup logging
 logging.basicConfig(

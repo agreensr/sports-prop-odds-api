@@ -21,7 +21,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from app.core.database import SessionLocal
-from app.services.injury_service import InjuryService
+from app.services.nba.injury_service import InjuryService
 
 # Configure logging
 logging.basicConfig(

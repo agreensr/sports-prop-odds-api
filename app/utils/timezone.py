@@ -3,14 +3,53 @@ Timezone utilities for NBA games.
 
 All times are displayed in Central Time (CST/CDT).
 Game times are stored in UTC and converted to Central for display.
+
+NBA.com provides game times in Eastern Time (ET/EDT).
 """
 from datetime import datetime, timezone, timedelta
-from typing import Tuple
+from typing import Tuple, Optional
 
 # Central Time is UTC-6 (standard) or UTC-5 (daylight saving)
-# We'll use a fixed offset approach for simplicity
 CENTRAL_TIME_OFFSET = timedelta(hours=-6)  # CST is UTC-6
-# During daylight saving (Mar-Nov), it's UTC-5
+
+# Eastern Time is UTC-5 (standard) or UTC-4 (daylight saving)
+EASTERN_TIME_OFFSET = timedelta(hours=-5)  # EST is UTC-5
+EASTERN_DAYLIGHT_OFFSET = timedelta(hours=-4)  # EDT is UTC-4
+
+
+def et_to_utc(et_datetime: datetime) -> datetime:
+    """
+    Convert Eastern Time datetime to UTC.
+
+    NBA.com game times are in Eastern Time. This function properly
+    converts ET to UTC, handling both EST (UTC-5) and EDT (UTC-4).
+
+    Args:
+        et_datetime: Eastern Time datetime (timezone-aware or naive)
+
+    Returns:
+        UTC datetime as naive datetime (for database storage)
+
+    Example:
+        >>> et_to_utc(datetime(2026, 1, 23, 19, 0, 0))  # Assumes EST
+        datetime(2026, 1, 24, 0, 0, 0)  # Midnight UTC (7 PM ET + 5 hours)
+    """
+    if et_datetime.tzinfo is None:
+        # Assume EST if no timezone info (naive ET from NBA.com)
+        et_datetime = et_datetime.replace(tzinfo=timezone.utc)
+
+    # Get the timezone offset
+    tz_offset = et_datetime.utcoffset()
+
+    # If no offset (GMT/UTC), assume EST for NBA games
+    if tz_offset is None:
+        tz_offset = EASTERN_TIME_OFFSET
+
+    # Convert to UTC by subtracting the offset
+    utc_datetime = et_datetime - tz_offset
+
+    # Return as naive datetime (for database storage)
+    return utc_datetime.replace(tzinfo=None)
 
 def utc_to_central(utc_datetime: datetime) -> datetime:
     """

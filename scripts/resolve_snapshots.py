@@ -31,8 +31,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from app.core.database import SessionLocal
-from app.models.models import Game, HistoricalOddsSnapshot, PlayerStats
-from app.services.historical_odds_service import HistoricalOddsService
+from app.models.nba.models import Game, HistoricalOddsSnapshot, PlayerStats
+from app.services.nba.historical_odds_service import HistoricalOddsService
 from sqlalchemy import func
 
 # Setup logging

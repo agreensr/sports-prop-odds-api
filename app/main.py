@@ -13,7 +13,11 @@ from fastapi.responses import JSONResponse
 
 from app.core.config import settings
 from app.core.database import init_db
-from app.api.routes import predictions, players, data, odds, nfl, accuracy, parlays, bets, injuries, lineups, historical_odds
+# Sport-specific routes
+from app.api.routes.nba import predictions as nba_predictions, players as nba_players, data as nba_data, odds as nba_odds, injuries as nba_injuries, lineups as nba_lineups, parlays as nba_parlays, historical_odds as nba_historical_odds
+from app.api.routes.nfl import predictions as nfl_predictions
+# Shared routes
+from app.api.routes.shared import accuracy, bets
 
 # Load environment variables from .env file
 from dotenv import load_dotenv
@@ -60,18 +64,51 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include routers
-app.include_router(predictions.router)
-app.include_router(players.router)
-app.include_router(data.router)
-app.include_router(odds.router)
-app.include_router(nfl.router)
+# ============================================================================
+# ROUTE REGISTRATION - SPORT-SPECIFIC ARCHITECTURE
+# ============================================================================
+#
+# IMPORTANT: This codebase uses a sport-specific directory structure.
+# When adding new routes, ALWAYS follow this pattern:
+#
+# 1. Sport-specific routes (NBA, NFL, MLB, etc.):
+#    - File: app/api/routes/{sport}/{feature}.py
+#    - Router: APIRouter(prefix="/{feature}", tags=["{sport}-{feature}"])
+#    - Mount: app.include_router(router, prefix="/api/{sport}")
+#    - Result: /api/{sport}/{feature}/...
+#
+# 2. Shared routes (work for all sports):
+#    - File: app/api/routes/shared/{feature}.py
+#    - Router: APIRouter(prefix="/api/{feature}", tags=["{feature}"])
+#    - Mount: app.include_router(router)  # No prefix added
+#    - Result: /api/{feature}/...
+#
+# Example: Adding NBA feature "player-props"
+#   - Create: app/api/routes/nba/player_props.py
+#   - Define: router = APIRouter(prefix="/player-props")
+#   - Mount: app.include_router(router, prefix="/api/nba")
+#   - URL: /api/nba/player-props/...
+#
+# ⚠️  NEVER add sport-specific features to shared routes!
+# ⚠️  ALWAYS use fully-qualified imports: from app.api.routes.nba import ...
+#
+# ============================================================================
+
+# Include routers with sport-specific prefixes
+# All NBA routers use the same /api/nba prefix - they have their own sub-prefixes internally
+app.include_router(nba_predictions.router, prefix="/api/nba")
+app.include_router(nba_players.router, prefix="/api/nba")
+app.include_router(nba_data.router, prefix="/api/nba")
+app.include_router(nba_odds.router, prefix="/api/nba")
+app.include_router(nba_injuries.router, prefix="/api/nba")
+app.include_router(nba_lineups.router, prefix="/api/nba")
+app.include_router(nba_parlays.router, prefix="/api/nba")
+app.include_router(nba_historical_odds.router, prefix="/api/nba")
+# NFL routes
+app.include_router(nfl_predictions.router, prefix="/api/nfl")
+# Shared routes (sport-agnostic) - these keep their own prefixes
 app.include_router(accuracy.router)
-app.include_router(parlays.router)
 app.include_router(bets.router)
-app.include_router(injuries.router)
-app.include_router(lineups.router)
-app.include_router(historical_odds.router)
 
 
 @app.get("/")
@@ -81,17 +118,25 @@ async def root():
         "name": settings.APP_NAME,
         "version": settings.APP_VERSION,
         "status": "running",
+        "sports": ["nba", "nfl"],
         "endpoints": {
-            "predictions": "/api/predictions",
-            "players": "/api/players",
-            "data": "/api/data",
-            "odds": "/api/odds",
-            "accuracy": "/api/accuracy",
-            "parlays": "/api/parlays",
-            "bets": "/api/bets",
-            "injuries": "/api/injuries",
-            "lineups": "/api/lineups",
-            "historical-odds": "/api/historical-odds",
+            "nba": {
+                "predictions": "/api/nba/predictions",
+                "players": "/api/nba/players",
+                "data": "/api/nba/data",
+                "odds": "/api/nba/odds",
+                "injuries": "/api/nba/injuries",
+                "lineups": "/api/nba/lineups",
+                "parlays": "/api/nba/parlays",
+                "historical_odds": "/api/nba/historical-odds"
+            },
+            "nfl": {
+                "predictions": "/api/nfl/api/nfl/predictions"
+            },
+            "shared": {
+                "accuracy": "/api/accuracy",
+                "bets": "/api/bets"
+            },
             "docs": "/docs",
             "health": "/health"
         }
@@ -112,7 +157,7 @@ async def api_health():
     """Detailed API health check."""
     try:
         from app.core.database import SessionLocal
-        from app.models.models import Player, Game, Prediction, PlayerInjury, ExpectedLineup
+        from app.models.nba.models import Player, Game, Prediction, PlayerInjury, ExpectedLineup
 
         db = SessionLocal()
 
@@ -124,7 +169,7 @@ async def api_health():
         lineup_count = db.query(ExpectedLineup).count()
 
         # Import here to avoid circular dependency
-        from app.models.models import HistoricalOddsSnapshot
+        from app.models.nba.models import HistoricalOddsSnapshot
 
         historical_odds_count = db.query(HistoricalOddsSnapshot).count()
         resolved_odds_count = db.query(HistoricalOddsSnapshot).filter(
@@ -147,16 +192,20 @@ async def api_health():
                 "historical_odds_resolved": resolved_odds_count
             },
             "endpoints": {
-                "predictions": "/api/predictions",
-                "players": "/api/players",
-                "data": "/api/data",
-                "odds": "/api/odds",
-                "accuracy": "/api/accuracy",
-                "parlays": "/api/parlays",
-                "bets": "/api/bets",
-                "injuries": "/api/injuries",
-                "lineups": "/api/lineups",
-                "historical-odds": "/api/historical-odds"
+                "nba": {
+                    "predictions": "/api/nba/predictions",
+                    "players": "/api/nba/players",
+                    "data": "/api/nba/data",
+                    "odds": "/api/nba/odds",
+                    "injuries": "/api/nba/injuries",
+                    "lineups": "/api/nba/lineups",
+                    "parlays": "/api/nba/parlays",
+                    "historical_odds": "/api/nba/historical-odds"
+                },
+                "shared": {
+                    "accuracy": "/api/accuracy",
+                    "bets": "/api/bets"
+                }
             }
         }
     except Exception as e:

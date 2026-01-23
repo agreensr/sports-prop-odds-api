@@ -20,11 +20,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from app.core.database import SessionLocal
-from app.models.models import Game, Prediction, Player
-from app.services.prediction_service import PredictionService
-from app.services.odds_api_service import OddsApiService
-from app.services.odds_mapper import OddsMapper
-from app.services.boxscore_import_service import BoxscoreImportService
+from app.models.nba.models import Game, Prediction, Player
+from app.services.nba.prediction_service import PredictionService
+from app.services.core.odds_api_service import OddsApiService
+from app.services.data_sources.odds_mapper import OddsMapper
+from app.services.nba.boxscore_import_service import BoxscoreImportService
 
 # Setup logging
 logging.basicConfig(

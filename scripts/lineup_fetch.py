@@ -21,7 +21,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from app.core.database import SessionLocal
-from app.services.lineup_service import LineupService
+from app.services.nba.lineup_service import LineupService
 
 # Configure logging
 logging.basicConfig(

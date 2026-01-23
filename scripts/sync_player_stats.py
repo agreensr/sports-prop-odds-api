@@ -22,7 +22,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from app.core.database import SessionLocal
-from app.services.nba_api_service import NbaApiService
+from app.services.nba.nba_api_service import NbaApiService
 
 # Configure logging
 logging.basicConfig(

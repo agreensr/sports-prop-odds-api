@@ -1,7 +1,11 @@
-# NBA Player Prop Prediction API
+# Sports Betting AI API
 
-AI-powered NBA player prop predictions with injury tracking, lineup projections,
-and parlay generation. Official NBA.com data integration with betting odds from bookmakers.
+AI-powered player prop predictions for NBA, NFL, and more with injury tracking, lineup projections,
+and parlay generation. Official league API integration with betting odds from bookmakers.
+
+**🔔 IMPORTANT: Multi-Sport Architecture**
+
+This codebase uses a **sport-specific directory structure** to support multiple sports. When adding new features, **ALWAYS** follow the sport-specific naming conventions documented below.
 
 ## Tech Stack
 
@@ -31,32 +35,57 @@ and parlay generation. Official NBA.com data integration with betting odds from 
 
 ## Project Structure
 
+**Multi-Sport Architecture:**
+
 ```
 sports-bet-ai-api/
 ├── app/
-│   ├── api/routes/
-│   │   ├── predictions.py      # Prediction endpoints
-│   │   ├── players.py           # Player endpoints
-│   │   ├── odds.py              # Odds endpoints
-│   │   ├── injuries.py          # Injury tracking endpoints
-│   │   ├── lineups.py           # Lineup projection endpoints
-│   │   ├── parlays.py           # Parlay generation endpoints
-│   │   ├── bets.py              # Bet tracking endpoints
-│   │   └── accuracy.py          # Accuracy tracking endpoints
-│   ├── core/
-│   │   └── database.py          # Database session management
 │   ├── models/
-│   │   └── models.py             # SQLAlchemy models
+│   │   ├── nba/models.py         # NBA-specific database models
+│   │   ├── nfl/models.py         # NFL-specific models (future)
+│   │   ├── mlb/models.py         # MLB-specific models (future)
+│   │   └── nhl/models.py         # NHL-specific models (future)
+│   │
 │   ├── services/
-│   │   ├── nba_service.py        # NBA API integration
-│   │   ├── odds_api_service.py   # The Odds API client
-│   │   ├── prediction_service.py # Prediction generation (injury-aware)
-│   │   ├── injury_service.py    # Injury tracking (ESPN + Firecrawl)
-│   │   ├── lineup_service.py     # Lineup projections (Rotowire)
-│   │   ├── parlay_service.py     # Parlay generation
-│   │   └── bet_tracking_service.py # Bet tracking
+│   │   ├── core/                 # Sport-agnostic services
+│   │   │   ├── accuracy_service.py
+│   │   │   ├── bet_tracking_service.py
+│   │   │   ├── parlay_service.py
+│   │   │   └── odds_api_service.py
+│   │   ├── data_sources/         # External API clients
+│   │   │   └── odds_mapper.py
+│   │   ├── nba/                  # NBA-specific services
+│   │   │   ├── nba_service.py
+│   │   │   ├── prediction_service.py
+│   │   │   ├── injury_service.py
+│   │   │   ├── lineup_service.py
+│   │   │   ├── nba_api_service.py
+│   │   │   ├── historical_odds_service.py
+│   │   │   └── boxscore_import_service.py
+│   │   ├── nfl/                  # NFL-specific services
+│   │   └── mlb/, nhl/            # Future sports
+│   │
+│   ├── api/routes/
+│   │   ├── nba/                  # NBA endpoints
+│   │   │   ├── predictions.py
+│   │   │   ├── players.py
+│   │   │   ├── data.py
+│   │   │   ├── odds.py
+│   │   │   ├── injuries.py
+│   │   │   ├── lineups.py
+│   │   │   ├── parlays.py
+│   │   │   └── historical_odds.py
+│   │   ├── nfl/                  # NFL endpoints
+│   │   ├── shared/               # Sport-agnostic endpoints
+│   │   │   ├── accuracy.py
+│   │   │   └── bets.py
+│   │   └── mlb/, nhl/            # Future sports
+│   │
+│   ├── core/
+│   │   ├── database.py           # Database session management
+│   │   └── config.py             # Configuration settings
 │   ├── utils/
-│   │   └── timezone.py          # Timezone utilities
+│   │   └── timezone.py           # Timezone utilities
 │   └── main.py                   # FastAPI application
 ├── scripts/
 │   ├── daily_odds_fetch.py      # Daily odds automation
@@ -187,73 +216,102 @@ sports-bet-ai-api/
 
 ## API Endpoints
 
-### Predictions
-- `GET /api/predictions/player/{player_id}`
-- `GET /api/predictions/player/nba/{nba_id}`
-- `GET /api/predictions/game/{game_id}`
-- `GET /api/predictions/game/nba/{nba_game_id}`
-- `GET /api/predictions/top`
-- `GET /api/predictions/recent`
-- `GET /api/predictions/stat-types`
-- `POST /api/predictions/generate/upcoming`
-- `GET /api/nfl/predictions/player/{player_id}`
-- `GET /api/nfl/predictions/top`
+### NBA Endpoints (`/api/nba/*`)
 
-### Players
-- `GET /api/players/search`
-- `GET /api/players/{player_id}`
-- `GET /api/players/nba/{nba_id}`
-- `GET /api/players/nba/{nba_id}/predictions`
-- `GET /api/players/`
-- `GET /api/players/teams/list`
+#### Predictions
+- `GET /api/nba/predictions/player/{player_id}`
+- `GET /api/nba/predictions/player/nba/{nba_id}`
+- `GET /api/nba/predictions/game/{game_id}`
+- `GET /api/nba/predictions/game/nba/{nba_game_id}`
+- `GET /api/nba/predictions/top`
+- `GET /api/nba/predictions/recent`
+- `GET /api/nba/predictions/stat-types`
+- `POST /api/nba/predictions/generate/upcoming`
 
-### Odds
-- `GET /api/odds/quota`
-- `POST /api/odds/fetch/game-odds`
-- `POST /api/odds/fetch/player-props/{game_id}`
-- `GET /api/odds/game/{game_id}`
+#### Players
+- `GET /api/nba/players/search`
+- `GET /api/nba/players/{player_id}`
+- `GET /api/nba/players/nba/{nba_id}`
+- `GET /api/nba/players/nba/{nba_id}/predictions`
+- `GET /api/nba/players/`
+- `GET /api/nba/players/teams/list`
 
-### Injuries
-- `GET /api/injuries/`
-- `GET /api/injuries/player/{player_id}`
-- `GET /api/injuries/context/{player_id}`
-- `POST /api/injuries/fetch`
-- `GET /api/injuries/stats/summary`
+#### Odds
+- `GET /api/nba/odds/quota`
+- `POST /api/nba/odds/fetch/game-odds`
+- `POST /api/nba/odds/fetch/player-props/{game_id}`
+- `GET /api/nba/odds/game/{game_id}`
 
-### Lineups
-- `GET /api/lineups/game/{game_id}`
-- `GET /api/lineups/player/{player_id}`
-- `GET /api/lineups/player/{player_id}/minutes`
-- `POST /api/lineups/fetch`
-- `GET /api/lineups/team/{team}`
-- `GET /api/lineups/stats/summary`
+#### Injuries
+- `GET /api/nba/injuries/`
+- `GET /api/nba/injuries/player/{player_id}`
+- `GET /api/nba/injuries/context/{player_id}`
+- `POST /api/nba/injuries/fetch`
+- `GET /api/nba/injuries/stats/summary`
 
-### Parlays
-- `POST /api/parlays/generate/same-game/{game_id}`
-- `POST /api/parlays/generate/multi-game`
-- `GET /api/parlays/`
-- `GET /api/parlays/top-ev`
-- `GET /api/parlays/{parlay_id}`
-- `GET /api/parlays/game/{game_id}`
-- `DELETE /api/parlays/cleanup`
-- `GET /api/parlays/stats/summary`
+#### Lineups
+- `GET /api/nba/lineups/game/{game_id}`
+- `GET /api/nba/lineups/player/{player_id}`
+- `GET /api/nba/lineups/player/{player_id}/minutes`
+- `POST /api/nba/lineups/fetch`
+- `GET /api/nba/lineups/team/{team}`
+- `GET /api/nba/lineups/stats/summary`
 
-### Bets
+#### Parlays
+- `POST /api/nba/parlays/generate/same-game/{game_id}`
+- `POST /api/nba/parlays/generate/multi-game`
+- `GET /api/nba/parlays/`
+- `GET /api/nba/parlays/top-ev`
+- `GET /api/nba/parlays/{parlay_id}`
+- `GET /api/nba/parlays/game/{game_id}`
+- `DELETE /api/nba/parlays/cleanup`
+- `GET /api/nba/parlays/stats/summary`
+
+#### Historical Odds
+- `POST /api/nba/historical-odds/backfill`
+- `GET /api/nba/historical-odds/stats`
+- `POST /api/nba/historical-odds/capture/{game_id}`
+- `POST /api/nba/historical-odds/resolve/{game_id}`
+
+#### Data
+- `POST /api/nba/data/fetch/upcoming`
+- `POST /api/nba/data/fetch/from-odds`
+- `POST /api/nba/data/fetch/players`
+- `GET /api/nba/data/status`
+- `POST /api/nba/data/clear-cache`
+- `POST /api/nba/data/fetch/single-game/{nba_game_id}`
+
+### NFL Endpoints (`/api/nfl/*`)
+- `POST /api/nfl/api/nfl/data/fetch/players`
+- `GET /api/nfl/api/nfl/data/status`
+- `GET /api/nfl/api/nfl/health`
+- `GET /api/nfl/api/nfl/predictions/player/{player_id}`
+- `GET /api/nfl/api/nfl/predictions/top`
+
+### Shared Endpoints (Sport-Agnostic)
+
+#### Accuracy
+- `GET /api/accuracy/overall`
+- `GET /api/accuracy/by-stat-type`
+- `GET /api/accuracy/timeline`
+- `GET /api/accuracy/drift-check`
+- `GET /api/accuracy/best-worst`
+- `GET /api/accuracy/by-player`
+- `GET /api/accuracy/resolution-status`
+- `GET /api/accuracy/unresolved-games`
+- `POST /api/accuracy/resolve/{game_id}`
+- `POST /api/accuracy/resolve-recent`
+
+#### Bets
 - `POST /api/bets/`
 - `GET /api/bets/`
 - `GET /api/bets/summary`
 - `GET /api/bets/{bet_id}`
 - `PUT /api/bets/{bet_id}/result`
 
-### Data
-- `POST /api/nfl/data/fetch/players`
-- `GET /api/nfl/data/status`
-- `POST /api/data/fetch/upcoming`
-- `POST /api/data/fetch/from-odds`
-- `POST /api/data/fetch/players`
-- `GET /api/data/status`
-- `POST /api/data/clear-cache`
-- `POST /api/data/fetch/single-game/{nba_game_id}`
+### Health
+- `GET /health` - Basic health check
+- `GET /api/health` - Detailed health with database stats
 
 ### Accuracy
 - `GET /api/accuracy/overall`
@@ -268,8 +326,129 @@ sports-bet-ai-api/
 - `POST /api/accuracy/resolve-recent`
 
 ### Health
-- `GET /api/nfl/health`
+- `GET /health` - Basic health check
+- `GET /api/health` - Detailed health with database stats
 
+---
+
+## 🚀 Development Guidelines
+
+### **CRITICAL: Always Use Sport-Specific Naming**
+
+This codebase is designed for **multi-sport support**. When adding new features, **NEVER** create sport-agnostic code in sport-specific areas.
+
+### 📁 Decision Tree: Where Should My Code Go?
+
+```
+Is your feature specific to ONE sport (NBA, NFL, MLB, etc.)?
+│
+├─ YES → Put it in the sport's directory:
+│   ├─ Models:     app/models/{sport}/models.py
+│   ├─ Services:   app/services/{sport}/{feature}_service.py
+│   └─ Routes:     app/api/routes/{sport}/{feature}.py
+│
+└─ NO → Put it in shared/core directories:
+    ├─ Services:   app/services/core/{feature}_service.py
+    └─ Routes:     app/api/routes/shared/{feature}.py
+```
+
+### ✅ DO: Sport-Specific Examples
+
+**Adding NBA player prop feature:**
+```python
+# app/services/nba/player_prop_service.py  ✅ CORRECT
+class NBAPlayerPropService:
+    def get_nba_player_props(self, player_id: str):
+        # NBA-specific logic here
+        pass
+
+# app/api/routes/nba/player_props.py  ✅ CORRECT
+router = APIRouter(prefix="/player-props")
+@router.get("/{player_id}")
+async def get_player_props(player_id: str):
+    pass
+```
+
+**Resulting URL:** `/api/nba/player-props/{player_id}`
+
+### ❌ DON'T: Common Mistakes
+
+```python
+# app/services/player_prop_service.py  ❌ WRONG - Which sport?
+# app/api/routes/player_props.py        ❌ WRONG - Ambiguous!
+
+# app/services/nba/nba_player_prop_service.py  ❌ WRONG - Redundant "nba"
+# app/services/nba_service.py                   ❌ WRONG - If not NBA-specific
+```
+
+### 📋 Import Convention
+
+**Always use fully-qualified imports:**
+
+```python
+# ✅ CORRECT - Clear and explicit
+from app.models.nba.models import Player, Game, Prediction
+from app.services.nba.prediction_service import PredictionService
+from app.services.core.accuracy_service import AccuracyService
+from app.api.routes.nba import predictions as nba_predictions
+
+# ❌ AVOID - Vague about which sport
+from app.models.models import Player  # Old pattern, deprecated
+from app.services.prediction_service import PredictionService
+```
+
+### 🏗️ Adding a New Sport
+
+When adding support for MLB, NHL, or another sport:
+
+1. **Create model directory:**
+   ```bash
+   mkdir -p app/models/mlb
+   touch app/models/mlb/__init__.py
+   touch app/models/mlb/models.py
+   ```
+
+2. **Create service directory:**
+   ```bash
+   mkdir -p app/services/mlb
+   touch app/services/mlb/__init__.py
+   # Add sport-specific services
+   ```
+
+3. **Create route directory:**
+   ```bash
+   mkdir -p app/api/routes/mlb
+   touch app/api/routes/mlb/__init__.py
+   # Add route files with prefix="/resource-name"
+   ```
+
+4. **Update main.py:**
+   ```python
+   from app.api.routes.mlb import predictions as mlb_predictions
+   app.include_router(mlb_predictions.router, prefix="/api/mlb")
+   ```
+
+5. **Result:** URLs like `/api/mlb/predictions/top`
+
+### 🎯 Examples by Category
+
+| Feature Type | Sport-Specific? | Location | URL Pattern |
+|--------------|-----------------|----------|-------------|
+| NBA predictions | ✅ Yes | `app/api/routes/nba/predictions.py` | `/api/nba/predictions/*` |
+| NFL injury tracking | ✅ Yes | `app/api/routes/nfl/injuries.py` | `/api/nfl/injuries/*` |
+| Accuracy calculation | ❌ No | `app/api/routes/shared/accuracy.py` | `/api/accuracy/*` |
+| Bet placement | ❌ No | `app/api/routes/shared/bets.py` | `/api/bets/*` |
+| Odds API client | ❌ No | `app/services/core/odds_api_service.py` | N/A |
+| MLB lineup projections | ✅ Yes | `app/services/mlb/lineup_service.py` | N/A |
+
+### ⚠️ Before Committing
+
+Ask yourself:
+1. **Is this feature sport-specific?** → If yes, use sport directory
+2. **Can this work for ANY sport?** → If yes, use shared/core
+3. **Are my imports sport-qualified?** → Use `app.models.nba.models`, not `app.models.models`
+
+---
 
 ## VPS Setup
 
