@@ -387,7 +387,7 @@ class PredictionService:
             hit_rate_data = hit_rate_service.get_player_hit_rate(
                 player_id=player.id,
                 stat_type=stat_type,
-                games_back=15,
+                games_back=10,
                 starters_only=True
             )
 

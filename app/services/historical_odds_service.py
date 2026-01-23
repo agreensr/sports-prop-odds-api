@@ -358,7 +358,7 @@ class HistoricalOddsService:
         player_id: str,
         stat_type: str,
         bookmaker_name: Optional[str] = None,
-        games_back: int = 15,
+        games_back: int = 10,
         starters_only: bool = True
     ) -> Dict[str, any]:
         """
@@ -427,9 +427,9 @@ class HistoricalOddsService:
         hit_rate = over_hits / total if total > 0 else 0.5
 
         # Determine sample size adjective
-        if total >= 15:
+        if total >= 10:
             sample_size = "strong"
-        elif total >= 10:
+        elif total >= 7:
             sample_size = "moderate"
         elif total >= 5:
             sample_size = "limited"
@@ -473,9 +473,9 @@ class HistoricalOddsService:
         strength_factor = 2.0  # How much to weight deviation from 0.5
 
         # Sample multiplier based on games
-        if total_games >= 15:
+        if total_games >= 10:
             sample_multiplier = 1.0
-        elif total_games >= 10:
+        elif total_games >= 7:
             sample_multiplier = 0.75
         else:
             sample_multiplier = 0.5
@@ -490,7 +490,7 @@ class HistoricalOddsService:
         self,
         player_ids: List[str],
         stat_types: List[str],
-        games_back: int = 15,
+        games_back: int = 10,
         starters_only: bool = True
     ) -> Dict[str, Dict[str, Dict]]:
         """
@@ -605,7 +605,7 @@ class HistoricalOddsService:
     def get_player_report(
         self,
         player_id: str,
-        games_back: int = 15
+        games_back: int = 10
     ) -> Dict[str, any]:
         """
         Get comprehensive hit rate report for a player.

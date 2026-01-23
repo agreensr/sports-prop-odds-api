@@ -29,7 +29,7 @@ class BatchHitRateRequest(BaseModel):
     """Request model for batch hit rate queries."""
     player_ids: List[str]
     stat_types: List[str]
-    games_back: int = 15
+    games_back: int = 10
 
 
 @router.get("/hit-rate/{player_id}")
@@ -37,7 +37,7 @@ async def get_player_hit_rate(
     player_id: str,
     stat_type: str = Query(..., description="Stat type: points, rebounds, assists, threes"),
     bookmaker: Optional[str] = Query(None, description="Filter by bookmaker (FanDuel, DraftKings, etc.)"),
-    games_back: int = Query(15, description="Number of recent games to analyze", ge=1, le=50),
+    games_back: int = Query(10, description="Number of recent games to analyze", ge=1, le=50),
     starters_only: bool = Query(True, description="Only include games as starter"),
     db: Session = Depends(get_db)
 ):
@@ -93,7 +93,7 @@ async def get_batch_hit_rates(
     {
         "player_ids": ["uuid1", "uuid2", "uuid3"],
         "stat_types": ["points", "assists"],
-        "games_back": 15
+        "games_back": 10
     }
     ```
 
@@ -159,7 +159,7 @@ async def trigger_backfill(
 @router.get("/player-report/{player_id}")
 async def get_player_report(
     player_id: str,
-    games_back: int = Query(15, description="Number of recent games", ge=1, le=50),
+    games_back: int = Query(10, description="Number of recent games", ge=1, le=50),
     db: Session = Depends(get_db)
 ):
     """
@@ -171,7 +171,7 @@ async def get_player_report(
     ```json
     {
         "player_id": "uuid",
-        "games_back": 15,
+        "games_back": 10,
         "hit_rates": {
             "points": {"hit_rate": 0.667, "total_games": 12, "over_hits": 8, ...},
             "rebounds": {"hit_rate": 0.500, "total_games": 10, "over_hits": 5, ...},
