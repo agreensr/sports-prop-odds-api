@@ -16,6 +16,7 @@ class Player(Base):
     id = Column(String(36), primary_key=True)  # character varying(36)
     external_id = Column(String(100), unique=True, nullable=False, index=True)  # NBA or ESPN ID
     id_source = Column(String(10), nullable=False, index=True, default='nba')  # 'nba' or 'espn'
+    nba_api_id = Column(Integer, nullable=True, index=True)  # nba_api numeric ID (for nba_api package)
     name = Column(String(255), nullable=False, index=True)
     team = Column(String(3), nullable=False, index=True)  # Team abbreviation (3 chars)
     position = Column(String(10))
