@@ -13,7 +13,7 @@ from fastapi.responses import JSONResponse
 
 from app.core.config import settings
 from app.core.database import init_db
-from app.api.routes import predictions, players, data, odds, nfl, accuracy, parlays, bets, injuries, lineups
+from app.api.routes import predictions, players, data, odds, nfl, accuracy, parlays, bets, injuries, lineups, historical_odds
 
 # Load environment variables from .env file
 from dotenv import load_dotenv
@@ -71,6 +71,7 @@ app.include_router(parlays.router)
 app.include_router(bets.router)
 app.include_router(injuries.router)
 app.include_router(lineups.router)
+app.include_router(historical_odds.router)
 
 
 @app.get("/")
@@ -90,6 +91,7 @@ async def root():
             "bets": "/api/bets",
             "injuries": "/api/injuries",
             "lineups": "/api/lineups",
+            "historical-odds": "/api/historical-odds",
             "docs": "/docs",
             "health": "/health"
         }
@@ -121,6 +123,14 @@ async def api_health():
         injury_count = db.query(PlayerInjury).count()
         lineup_count = db.query(ExpectedLineup).count()
 
+        # Import here to avoid circular dependency
+        from app.models.models import HistoricalOddsSnapshot
+
+        historical_odds_count = db.query(HistoricalOddsSnapshot).count()
+        resolved_odds_count = db.query(HistoricalOddsSnapshot).filter(
+            HistoricalOddsSnapshot.hit_result.isnot(None)
+        ).count()
+
         db.close()
 
         return {
@@ -132,7 +142,9 @@ async def api_health():
                 "games": game_count,
                 "predictions": prediction_count,
                 "injuries": injury_count,
-                "lineups": lineup_count
+                "lineups": lineup_count,
+                "historical_odds_snapshots": historical_odds_count,
+                "historical_odds_resolved": resolved_odds_count
             },
             "endpoints": {
                 "predictions": "/api/predictions",
@@ -143,7 +155,8 @@ async def api_health():
                 "parlays": "/api/parlays",
                 "bets": "/api/bets",
                 "injuries": "/api/injuries",
-                "lineups": "/api/lineups"
+                "lineups": "/api/lineups",
+                "historical-odds": "/api/historical-odds"
             }
         }
     except Exception as e:

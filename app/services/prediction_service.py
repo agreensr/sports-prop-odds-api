@@ -14,12 +14,12 @@ Research-backed approach:
 - Source: https://www.jssm.org/volume24/iss2/cap/jssm-24-363.pdf
 """
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Dict, Optional
 from sqlalchemy.orm import Session
 import random
 
-from app.models.models import Player, Game, Prediction, PlayerStats
+from app.models.models import Player, Game, Prediction, PlayerStats, PlayerSeasonStats
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +46,7 @@ class PredictionService:
         # Lazy load services to avoid circular imports
         self._injury_service = None
         self._lineup_service = None
+        self._nba_api_service = None
 
     @property
     def injury_service(self):
@@ -62,6 +63,14 @@ class PredictionService:
             from app.services.lineup_service import LineupService
             self._lineup_service = LineupService(self.db)
         return self._lineup_service
+
+    @property
+    def nba_api_service(self):
+        """Lazy load nba_api service."""
+        if self._nba_api_service is None:
+            from app.services.nba_api_service import NbaApiService
+            self._nba_api_service = NbaApiService(self.db)
+        return self._nba_api_service
 
     def generate_predictions_for_game(
         self,
@@ -107,6 +116,10 @@ class PredictionService:
             injury_context = self.injury_service.get_player_injury_context(player.id, game.id)
             minutes_projection = self.lineup_service.get_player_minutes_projection(player.id, game.id)
 
+            # Ensure injury_context is always a dict (defensive check)
+            if injury_context is None:
+                injury_context = {}
+
             for stat_type in stat_types:
                 # Check if prediction already exists
                 existing = (
@@ -129,12 +142,12 @@ class PredictionService:
                 )
 
                 # Skip predictions for players who are OUT
-                if injury_context.get('self_injury', {}).get('status') == 'out':
+                if (injury_context.get('self_injury') or {}).get('status') == 'out':
                     logger.info(f"Skipping prediction for {player.name} - status: OUT")
                     continue
 
                 # Calculate confidence based on various factors
-                confidence = self._calculate_confidence(player, stat_type, predicted_value, injury_context)
+                confidence = self._calculate_confidence(player, stat_type, predicted_value, injury_context, game.id)
 
                 # Determine recommendation
                 recommendation = self._get_recommendation(confidence)
@@ -189,10 +202,13 @@ class PredictionService:
         minutes_projection: Optional[int] = None
     ) -> float:
         """
-        Calculate predicted value with injury and lineup awareness.
+        Calculate predicted value using player-specific historical stats from nba_api.
 
-        Key distinction: RETURNING players use historical per-36 efficiency,
-        not position averages. Their skill hasn't changed, only minutes.
+        FALLBACK CHAIN (improves accuracy by using actual player data):
+        1. nba_api season stats (last 15 games averaged to per-36)
+        2. Database cache (player_season_stats table, 24-hour TTL)
+        3. PlayerStats (most recent game from boxscore)
+        4. POSITION_AVERAGES (last resort)
 
         Formula: predicted_value = per_36_stat × (projected_minutes / 36)
 
@@ -210,36 +226,54 @@ class PredictionService:
         if injury_context is None:
             injury_context = self.injury_service.get_player_injury_context(player.id, game_id)
 
-        # Get player's historical stats from PlayerStats and calculate per-36
-        player_stats = self.db.query(PlayerStats).filter(
-            PlayerStats.player_id == player.id
-        ).order_by(PlayerStats.created_at.desc()).first()
+        # Ensure injury_context is always a dict (defensive check in case get_player_injury_context returns None)
+        if injury_context is None:
+            injury_context = {}
 
-        if player_stats:
-            # Calculate per-36 stats from actual game data
-            stat_value = getattr(player_stats, stat_type, None)
-            minutes = getattr(player_stats, 'minutes', None)
+        # STEP 1: Try database cache (primary data source - refreshed every 6 hours)
+        per_36_value = None
 
-            if stat_value is not None and minutes and minutes > 0:
-                # Calculate per-36 rate
-                per_36_value = stat_value * (36.0 / minutes)
-            else:
-                # Fallback to position average if no stats
-                position = player.position if player.position else None
-                averages = POSITION_AVERAGES.get(position, POSITION_AVERAGES[None])
-                per_36_value = averages.get(stat_type, 10.0)
+        # Check database cache for recent player stats
+        cached_stats = self.db.query(PlayerSeasonStats).filter(
+            PlayerSeasonStats.player_id == player.id,
+            PlayerSeasonStats.season == "2024-25",
+            PlayerSeasonStats.fetched_at >= datetime.now() - timedelta(hours=48)  # 48-hour cache window
+        ).first()
+
+        if cached_stats:
+            per_36_value = getattr(cached_stats, f'{stat_type}_per_36')
+            logger.info(f"Using cached stats for {player.name}: {stat_type}_per_36 = {per_36_value}")
         else:
-            # No stats available, use position average
+            logger.debug(f"No cached stats available for {player.name}, will use fallback")
+
+        # STEP 2: Fallback to PlayerStats (most recent game)
+        if per_36_value is None:
+            player_stats = self.db.query(PlayerStats).filter(
+                PlayerStats.player_id == player.id
+            ).order_by(PlayerStats.created_at.desc()).first()
+
+            if player_stats:
+                stat_value = getattr(player_stats, stat_type, None)
+                minutes = getattr(player_stats, 'minutes', None)
+
+                if stat_value is not None and minutes and minutes > 0:
+                    per_36_value = stat_value * (36.0 / minutes)
+                    logger.debug(f"Using PlayerStats for {player.name}: {stat_type}_per_36 = {per_36_value}")
+
+        # STEP 3: Final fallback to position averages
+        if per_36_value is None:
             position = player.position if player.position else None
             averages = POSITION_AVERAGES.get(position, POSITION_AVERAGES[None])
             per_36_value = averages.get(stat_type, 10.0)
+            logger.debug(f"Using position averages for {player.name}: {stat_type}_per_36 = {per_36_value}")
 
         # Get or estimate minutes
-        self_injury_status = injury_context.get('self_injury', {}).get('status')
+        self_injury_data = injury_context.get('self_injury') or {}
+        self_injury_status = self_injury_data.get('status')
 
         if self_injury_status == 'returning':
             # Use restricted minutes for returnees (18-25 typically)
-            games_played = injury_context.get('self_injury', {}).get('games_played_since_return', 0)
+            games_played = (injury_context.get('self_injury') or {}).get('games_played_since_return', 0)
             minutes_projection = 18 + min(games_played * 2, 12)  # Progressive increase
         elif self_injury_status in ['out', 'doubtful']:
             minutes_projection = 0
@@ -252,7 +286,7 @@ class PredictionService:
                 # Default to starter minutes if unknown
                 minutes_projection = 28
 
-        # Calculate prediction: per_36 × (minutes / 36)
+        # STEP 4: Calculate prediction: per_36 × (minutes / 36)
         predicted_value = per_36_value * (minutes_projection / 36.0)
 
         # Apply teammate boost (if teammates are out)
@@ -272,7 +306,8 @@ class PredictionService:
         player: Player,
         stat_type: str,
         predicted_value: float,
-        injury_context: Optional[Dict] = None
+        injury_context: Optional[Dict] = None,
+        game_id: Optional[str] = None
     ) -> float:
         """
         Calculate confidence score for a prediction.
@@ -283,6 +318,7 @@ class PredictionService:
         - Teammate injury boosts (clear path = higher confidence)
         - Position-stat alignment
         - Minutes projection certainty
+        - Historical hit rate weighting (NEW: tracks how often player hits their lines)
 
         Returns value between 0.0 and 1.0
         """
@@ -301,7 +337,8 @@ class PredictionService:
             confidence += 0.10  # Higher confidence with actual data
 
         # Apply injury status adjustments
-        self_injury_status = injury_context.get('self_injury', {}).get('status')
+        self_injury_data = injury_context.get('self_injury') or {}
+        self_injury_status = self_injury_data.get('status')
 
         if self_injury_status == 'out':
             confidence -= 0.30  # Heavy penalty for OUT players
@@ -339,6 +376,42 @@ class PredictionService:
                 confidence += 0.05  # Clear starter role
             elif minutes_projection <= 10:
                 confidence -= 0.05  # Limited role uncertainty
+
+        # NEW: Apply historical hit rate weighting
+        base_confidence = confidence
+
+        try:
+            from app.services.historical_odds_service import HistoricalOddsService
+
+            hit_rate_service = HistoricalOddsService(self.db)
+            hit_rate_data = hit_rate_service.get_player_hit_rate(
+                player_id=player.id,
+                stat_type=stat_type,
+                games_back=15,
+                starters_only=True
+            )
+
+            hit_rate_weight = hit_rate_service.calculate_hit_rate_weight(
+                hit_rate=hit_rate_data["hit_rate"],
+                total_games=hit_rate_data["total_games"]
+            )
+
+            # Apply weight to confidence
+            confidence = base_confidence * hit_rate_weight
+
+            # Log the adjustment
+            if hit_rate_data["total_games"] >= 5:
+                logger.info(
+                    f"Hit rate adjustment for {player.name} {stat_type}: "
+                    f"{hit_rate_data['hit_rate']} ({hit_rate_data['over_hits']}/{hit_rate_data['total_games']}) "
+                    f"weight={hit_rate_weight:.3f} "
+                    f"confidence={base_confidence:.3f}->{confidence:.3f}"
+                )
+
+        except Exception as e:
+            # Gracefully handle errors - use base confidence
+            logger.debug(f"Could not apply hit rate weighting for {player.name} {stat_type}: {e}")
+            confidence = base_confidence
 
         # Add small randomness to simulate model uncertainty
         confidence += random.uniform(-0.05, 0.05)

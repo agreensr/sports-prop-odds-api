@@ -20,6 +20,8 @@ class Player(Base):
     team = Column(String(3), nullable=False, index=True)  # Team abbreviation (3 chars)
     position = Column(String(10))
     active = Column(Boolean, nullable=False, index=True)
+    last_roster_check = Column(DateTime, nullable=True, index=True)  # Last validated against nba_api
+    data_source = Column(String(50), nullable=True, index=True)  # nba_api, espn, manual, etc.
     created_at = Column(DateTime, nullable=False)
     updated_at = Column(DateTime, nullable=False)
 
@@ -28,6 +30,7 @@ class Player(Base):
     stats = relationship("PlayerStats", back_populates="player", cascade="all, delete-orphan")
     injuries = relationship("PlayerInjury", backref="player", cascade="all, delete-orphan")
     lineup_entries = relationship("ExpectedLineup", backref="player", cascade="all, delete-orphan")
+    season_stats = relationship("PlayerSeasonStats", back_populates="player", cascade="all, delete-orphan")
 
     __table_args__ = (
         Index('ix_players_external_id', 'external_id'),
@@ -360,4 +363,94 @@ class ExpectedLineup(Base):
 
     __table_args__ = (
         Index('ix_expected_lineups_game_team', 'game_id', 'team'),
+    )
+
+
+class PlayerSeasonStats(Base):
+    """Cached player season-averaged per-36 stats from nba_api.
+
+    This table stores aggregated player statistics from recent games
+    to improve prediction accuracy. Data is fetched from nba_api and
+    cached here with a 24-hour TTL.
+
+    Key benefit: Uses player's actual per-36 efficiency instead of
+    position averages, dramatically improving prediction accuracy.
+    """
+    __tablename__ = "player_season_stats"
+
+    id = Column(String(36), primary_key=True)
+    player_id = Column(String(36), ForeignKey("players.id", ondelete="CASCADE"), nullable=False, index=True)
+    season = Column(String(10), nullable=False, index=True)  # e.g., "2024-25"
+
+    # Averages from recent games (typically 10-20)
+    games_count = Column(Integer, nullable=False)  # Number of games averaged
+    points_per_36 = Column(Float, nullable=False)
+    rebounds_per_36 = Column(Float, nullable=False)
+    assists_per_36 = Column(Float, nullable=False)
+    threes_per_36 = Column(Float, nullable=False)
+    avg_minutes = Column(Float, nullable=False)  # Average minutes played
+
+    # Tracking
+    last_game_date = Column(Date, nullable=True)  # Date of most recent game included
+    fetched_at = Column(DateTime, nullable=False, index=True)  # When this cache entry was created
+    created_at = Column(DateTime, nullable=False)
+    updated_at = Column(DateTime, nullable=False)
+
+    # Relationships
+    player = relationship("Player", back_populates="season_stats")
+
+    __table_args__ = (
+        UniqueConstraint('player_id', 'season', name='uq_player_season'),
+        Index('ix_player_season_stats_player_season', 'player_id', 'season'),
+        Index('ix_player_season_stats_fetched_at', 'fetched_at'),
+    )
+
+
+class HistoricalOddsSnapshot(Base):
+    """Historical bookmaker odds snapshots for hit rate calculation.
+
+    This table captures point-in-time player prop odds from bookmakers,
+    then resolves them against actual game results to calculate hit rates.
+
+    Hit rates measure how consistently a player hits OVER/UNDER on their
+    betting lines, which is used to weight prediction confidence.
+
+    Example: If LeBron James has hit his assist OVER in 8 of 10 games,
+    future assist predictions get a confidence boost.
+    """
+    __tablename__ = "historical_odds_snapshots"
+
+    id = Column(String(36), primary_key=True)
+    game_id = Column(String(36), ForeignKey("games.id", ondelete="CASCADE"), nullable=False, index=True)
+    player_id = Column(String(36), ForeignKey("players.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    # Odds details
+    stat_type = Column(String(50), nullable=False, index=True)  # points, rebounds, assists, threes
+    bookmaker_name = Column(String(100), nullable=False, index=True)  # FanDuel, DraftKings
+    bookmaker_line = Column(Float, nullable=False)  # The line (e.g., 23.5)
+    over_price = Column(Float, nullable=True)  # American odds for OVER
+    under_price = Column(Float, nullable=True)  # American odds for UNDER
+
+    # Snapshot timing
+    snapshot_time = Column(DateTime, nullable=False, index=True)  # When odds were captured
+
+    # Starter filtering
+    was_starter = Column(Boolean, default=False, nullable=False, index=True)
+
+    # Resolution (after game completion)
+    actual_value = Column(Float, nullable=True)
+    hit_result = Column(String(10), nullable=True, index=True)  # 'OVER', 'UNDER', 'PUSH'
+    resolved_at = Column(DateTime, nullable=True, index=True)
+
+    # Metadata
+    created_at = Column(DateTime, nullable=False)
+
+    # Relationships
+    game = relationship("Game")
+    player = relationship("Player")
+
+    __table_args__ = (
+        Index('ix_historical_odds_player_stat', 'player_id', 'stat_type'),
+        Index('ix_historical_odds_bookmaker', 'bookmaker_name'),
+        Index('ix_historical_odds_hit_result', 'hit_result'),
     )
