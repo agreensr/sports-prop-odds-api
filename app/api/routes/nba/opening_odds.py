@@ -265,14 +265,14 @@ async def capture_opening_odds(
         # Verify game exists
         game = db.query(Game).filter(Game.id == odd.game_id).first()
         if not game:
-            skipped.append({"odd": odd.dict(), "reason": "Game not found"})
+            skipped.append({"odd": odd.model_dump(), "reason": "Game not found"})
             continue
 
         # Verify player exists
         from app.models.nba.models import Player
         player = db.query(Player).filter(Player.id == odd.player_id).first()
         if not player:
-            skipped.append({"odd": odd.dict(), "reason": "Player not found"})
+            skipped.append({"odd": odd.model_dump(), "reason": "Player not found"})
             continue
 
         # Capture opening odds
@@ -297,7 +297,7 @@ async def capture_opening_odds(
             })
         else:
             skipped.append({
-                "odd": odd.dict(),
+                "odd": odd.model_dump(),
                 "reason": "Opening odds already exist"
             })
 
