@@ -462,10 +462,25 @@ cd /opt/sports-bet-ai-api
 Edit `.env` file:
 ```bash
 THE_ODDS_API_KEY=your_api_key_here
-DATABASE_URL=postgresql://postgres:password@localhost:5432/sports_betting
+DATABASE_URL=postgresql://postgres:nba_secure_pass_2026@localhost:5433/nba_props
 LOG_LEVEL=INFO
 FIRECRAWL_API_KEY=your_key_here  # Optional, for Firecrawl
 ```
+
+### Database Access (pgAdmin)
+Web-based database administration is available at:
+- **URL**: http://89.117.150.95:5050
+- **Email**: admin@example.com
+- **Password**: nba_pgadmin_2026
+
+To connect in pgAdmin:
+1. Login with the credentials above
+2. Click "Add New Server"
+3. Name: "NBA Production"
+4. Host: `nba-postgres` (Docker network) or `localhost:5433`
+5. Username: `postgres`
+6. Password: `nba_secure_pass_2026`
+7. Database: `nba_props`
 
 ## Running the API
 
