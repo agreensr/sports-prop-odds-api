@@ -6,8 +6,14 @@ Game times are stored in UTC and converted to Central for display.
 
 NBA.com provides game times in Eastern Time (ET/EDT).
 """
-from datetime import datetime, timezone, timedelta, UTC
+from datetime import datetime, timezone, timedelta
 from typing import Tuple, Optional
+
+# UTC timezone for Python < 3.11 compatibility
+try:
+    from datetime import UTC
+except ImportError:
+    UTC = timezone.utc
 
 # Central Time is UTC-6 (standard) or UTC-5 (daylight saving)
 CENTRAL_TIME_OFFSET = timedelta(hours=-6)  # CST is UTC-6

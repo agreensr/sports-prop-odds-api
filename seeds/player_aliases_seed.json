@@ -1,0 +1,454 @@
+{
+  "player_aliases": [
+    {
+      "id": "alias-1",
+      "nba_player_id": 203954,
+      "canonical_name": "Joel Embiid",
+      "alias_name": "Joel Embiid",
+      "alias_source": "odds_api",
+      "match_confidence": 1.0,
+      "is_verified": true
+    },
+    {
+      "id": "alias-2",
+      "nba_player_id": 2544,
+      "canonical_name": "LeBron James",
+      "alias_name": "Lebron James",
+      "alias_source": "odds_api",
+      "match_confidence": 1.0,
+      "is_verified": true
+    },
+    {
+      "id": "alias-3",
+      "nba_player_id": 1628369,
+      "canonical_name": "Luka Doncic",
+      "alias_name": "Luka Dončić",
+      "alias_source": "nba_api",
+      "match_confidence": 1.0,
+      "is_verified": true
+    },
+    {
+      "id": "alias-4",
+      "nba_player_id": 1629029,
+      "canonical_name": "Ja Morant",
+      "alias_name": "Ja Morant",
+      "alias_source": "odds_api",
+      "match_confidence": 1.0,
+      "is_verified": true
+    },
+    {
+      "id": "alias-5",
+      "nba_player_id": 1629630,
+      "canonical_name": "Trae Young",
+      "alias_name": "Trae Young",
+      "alias_source": "odds_api",
+      "match_confidence": 1.0,
+      "is_verified": true
+    },
+    {
+      "id": "alias-6",
+      "nba_player_id": 1630163,
+      "canonical_name": "Jayson Tatum",
+      "alias_name": "Jayson Tatum",
+      "alias_source": "odds_api",
+      "match_confidence": 1.0,
+      "is_verified": true
+    },
+    {
+      "id": "alias-7",
+      "nba_player_id": 1628989,
+      "canonical_name": "Shai Gilgeous-Alexander",
+      "alias_name": "Shai Gilgeous-Alexander",
+      "alias_source": "odds_api",
+      "match_confidence": 1.0,
+      "is_verified": true
+    },
+    {
+      "id": "alias-8",
+      "nba_player_id": 201939,
+      "canonical_name": "Stephen Curry",
+      "alias_name": "Stephen Curry",
+      "alias_source": "odds_api",
+      "match_confidence": 1.0,
+      "is_verified": true
+    },
+    {
+      "id": "alias-9",
+      "nba_player_id": 201939,
+      "canonical_name": "Stephen Curry",
+      "alias_name": "Steph Curry",
+      "alias_source": "odds_api",
+      "match_confidence": 1.0,
+      "is_verified": true
+    },
+    {
+      "id": "alias-10",
+      "nba_player_id": 202695,
+      "canonical_name": "Kawhi Leonard",
+      "alias_name": "Kawhi Leonard",
+      "alias_source": "odds_api",
+      "match_confidence": 1.0,
+      "is_verified": true
+    },
+    {
+      "id": "alias-11",
+      "nba_player_id": 203507,
+      "canonical_name": "Giannis Antetokounmpo",
+      "alias_name": "Giannis Antetokounmpo",
+      "alias_source": "odds_api",
+      "match_confidence": 1.0,
+      "is_verified": true
+    },
+    {
+      "id": "alias-12",
+      "nba_player_id": 203507,
+      "canonical_name": "Giannis Antetokounmpo",
+      "alias_name": "Giannis Antetokounmpo",
+      "alias_source": "nba_api",
+      "match_confidence": 1.0,
+      "is_verified": true
+    },
+    {
+      "id": "alias-13",
+      "nba_player_id": 1628373,
+      "canonical_name": "De'Aaron Fox",
+      "alias_name": "De'Aaron Fox",
+      "alias_source": "odds_api",
+      "match_confidence": 1.0,
+      "is_verified": true
+    },
+    {
+      "id": "alias-14",
+      "nba_player_id": 1628373,
+      "canonical_name": "De'Aaron Fox",
+      "alias_name": "DeAaron Fox",
+      "alias_source": "odds_api",
+      "match_confidence": 1.0,
+      "is_verified": true
+    },
+    {
+      "id": "alias-15",
+      "nba_player_id": 1628426,
+      "canonical_name": "Dejounte Murray",
+      "alias_name": "Dejounte Murray",
+      "alias_source": "odds_api",
+      "match_confidence": 1.0,
+      "is_verified": true
+    },
+    {
+      "id": "alias-16",
+      "nba_player_id": 1630169,
+      "canonical_name": "Jaylen Brown",
+      "alias_name": "Jaylen Brown",
+      "alias_source": "odds_api",
+      "match_confidence": 1.0,
+      "is_verified": true
+    },
+    {
+      "id": "alias-17",
+      "nba_player_id": 1627759,
+      "canonical_name": "Bam Adebayo",
+      "alias_name": "Bam Adebayo",
+      "alias_source": "odds_api",
+      "match_confidence": 1.0,
+      "is_verified": true
+    },
+    {
+      "id": "alias-18",
+      "nba_player_id": 1627759,
+      "canonical_name": "Bam Adebayo",
+      "alias_name": "Bam Adebayo",
+      "alias_source": "nba_api",
+      "match_confidence": 1.0,
+      "is_verified": true
+    },
+    {
+      "id": "alias-19",
+      "nba_player_id": 1629012,
+      "canonical_name": "Jaren Jackson Jr.",
+      "alias_name": "Jaren Jackson Jr.",
+      "alias_source": "odds_api",
+      "match_confidence": 1.0,
+      "is_verified": true
+    },
+    {
+      "id": "alias-20",
+      "nba_player_id": 1629012,
+      "canonical_name": "Jaren Jackson Jr.",
+      "alias_name": "Jaren Jackson Jr",
+      "alias_source": "nba_api",
+      "match_confidence": 1.0,
+      "is_verified": true
+    },
+    {
+      "id": "alias-21",
+      "nba_player_id": 1629644,
+      "canonical_name": "Collin Sexton",
+      "alias_name": "Collin Sexton",
+      "alias_source": "odds_api",
+      "match_confidence": 1.0,
+      "is_verified": true
+    },
+    {
+      "id": "alias-22",
+      "nba_player_id": 1629008,
+      "canonical_name": "Kyle Kuzma",
+      "alias_name": "Kyle Kuzma",
+      "alias_source": "odds_api",
+      "match_confidence": 1.0,
+      "is_verified": true
+    },
+    {
+      "id": "alias-23",
+      "nba_player_id": 1628384,
+      "canonical_name": "Lonzo Ball",
+      "alias_name": "Lonzo Ball",
+      "alias_source": "odds_api",
+      "match_confidence": 1.0,
+      "is_verified": true
+    },
+    {
+      "id": "alias-24",
+      "nba_player_id": 1630527,
+      "canonical_name": "LaMelo Ball",
+      "alias_name": "LaMelo Ball",
+      "alias_source": "odds_api",
+      "match_confidence": 1.0,
+      "is_verified": true
+    },
+    {
+      "id": "alias-25",
+      "nba_player_id": 1630582,
+      "canonical_name": "Anthony Edwards",
+      "alias_name": "Anthony Edwards",
+      "alias_source": "odds_api",
+      "match_confidence": 1.0,
+      "is_verified": true
+    },
+    {
+      "id": "alias-26",
+      "nba_player_id": 1630162,
+      "canonical_name": "Tyrese Haliburton",
+      "alias_name": "Tyrese Haliburton",
+      "alias_source": "odds_api",
+      "match_confidence": 1.0,
+      "is_verified": true
+    },
+    {
+      "id": "alias-27",
+      "nba_player_id": 1631095,
+      "canonical_name": "Jalen Williams",
+      "alias_name": "Jalen Williams",
+      "alias_source": "odds_api",
+      "match_confidence": 1.0,
+      "is_verified": true
+    },
+    {
+      "id": "alias-28",
+      "nba_player_id": 1630555,
+      "canonical_name": "Franz Wagner",
+      "alias_name": "Franz Wagner",
+      "alias_source": "odds_api",
+      "match_confidence": 1.0,
+      "is_verified": true
+    },
+    {
+      "id": "alias-29",
+      "nba_player_id": 1631093,
+      "canonical_name": "Paolo Banchero",
+      "alias_name": "Paolo Banchero",
+      "alias_source": "odds_api",
+      "match_confidence": 1.0,
+      "is_verified": true
+    },
+    {
+      "id": "alias-30",
+      "nba_player_id": 1630213,
+      "canonical_name": "Alperen Sengun",
+      "alias_name": "Alperen Sengun",
+      "alias_source": "odds_api",
+      "match_confidence": 1.0,
+      "is_verified": true
+    },
+    {
+      "id": "alias-31",
+      "nba_player_id": 1631173,
+      "canonical_name": "Victor Wembanyama",
+      "alias_name": "Victor Wembanyama",
+      "alias_source": "odds_api",
+      "match_confidence": 1.0,
+      "is_verified": true
+    },
+    {
+      "id": "alias-32",
+      "nba_player_id": 1631162,
+      "canonical_name": "Scoot Henderson",
+      "alias_name": "Scoot Henderson",
+      "alias_source": "odds_api",
+      "match_confidence": 1.0,
+      "is_verified": true
+    },
+    {
+      "id": "alias-33",
+      "nba_player_id": 1628969,
+      "canonical_name": "Michael Porter Jr.",
+      "alias_name": "Michael Porter Jr.",
+      "alias_source": "odds_api",
+      "match_confidence": 1.0,
+      "is_verified": true
+    },
+    {
+      "id": "alias-34",
+      "nba_player_id": 1628969,
+      "canonical_name": "Michael Porter Jr.",
+      "alias_name": "Michael Porter Jr",
+      "alias_source": "nba_api",
+      "match_confidence": 1.0,
+      "is_verified": true
+    },
+    {
+      "id": "alias-35",
+      "nba_player_id": 1628973,
+      "canonical_name": "Gary Trent Jr.",
+      "alias_name": "Gary Trent Jr.",
+      "alias_source": "odds_api",
+      "match_confidence": 1.0,
+      "is_verified": true
+    },
+    {
+      "id": "alias-36",
+      "nba_player_id": 1628973,
+      "canonical_name": "Gary Trent Jr.",
+      "alias_name": "Gary Trent Jr",
+      "alias_source": "nba_api",
+      "match_confidence": 1.0,
+      "is_verified": true
+    },
+    {
+      "id": "alias-37",
+      "nba_player_id": 1627732,
+      "canonical_name": "Dennis Smith Jr.",
+      "alias_name": "Dennis Smith Jr.",
+      "alias_source": "odds_api",
+      "match_confidence": 1.0,
+      "is_verified": true
+    },
+    {
+      "id": "alias-38",
+      "nba_player_id": 1627732,
+      "canonical_name": "Dennis Smith Jr.",
+      "alias_name": "Dennis Smith Jr",
+      "alias_source": "nba_api",
+      "match_confidence": 1.0,
+      "is_verified": true
+    },
+    {
+      "id": "alias-39",
+      "nba_player_id": 1629684,
+      "canonical_name": "Kevin Porter Jr.",
+      "alias_name": "Kevin Porter Jr.",
+      "alias_source": "odds_api",
+      "match_confidence": 1.0,
+      "is_verified": true
+    },
+    {
+      "id": "alias-40",
+      "nba_player_id": 1629684,
+      "canonical_name": "Kevin Porter Jr.",
+      "alias_name": "Kevin Porter Jr",
+      "alias_source": "nba_api",
+      "match_confidence": 1.0,
+      "is_verified": true
+    },
+    {
+      "id": "alias-41",
+      "nba_player_id": 1629627,
+      "canonical_name": "Tim Hardaway Jr.",
+      "alias_name": "Tim Hardaway Jr.",
+      "alias_source": "odds_api",
+      "match_confidence": 1.0,
+      "is_verified": true
+    },
+    {
+      "id": "alias-42",
+      "nba_player_id": 1629627,
+      "canonical_name": "Tim Hardaway Jr.",
+      "alias_name": "Tim Hardaway Jr",
+      "alias_source": "nba_api",
+      "match_confidence": 1.0,
+      "is_verified": true
+    },
+    {
+      "id": "alias-43",
+      "nba_player_id": 200768,
+      "canonical_name": "Kyle Lowry",
+      "alias_name": "Kyle Lowry",
+      "alias_source": "odds_api",
+      "match_confidence": 1.0,
+      "is_verified": true
+    },
+    {
+      "id": "alias-44",
+      "nba_player_id": 201587,
+      "canonical_name": "Kevin Durant",
+      "alias_name": "Kevin Durant",
+      "alias_source": "odds_api",
+      "match_confidence": 1.0,
+      "is_verified": true
+    },
+    {
+      "id": "alias-45",
+      "nba_player_id": 201566,
+      "canonical_name": "Kyrie Irving",
+      "alias_name": "Kyrie Irving",
+      "alias_source": "odds_api",
+      "match_confidence": 1.0,
+      "is_verified": true
+    },
+    {
+      "id": "alias-46",
+      "nba_player_id": 202681,
+      "canonical_name": "Klay Thompson",
+      "alias_name": "Klay Thompson",
+      "alias_source": "odds_api",
+      "match_confidence": 1.0,
+      "is_verified": true
+    },
+    {
+      "id": "alias-47",
+      "nba_player_id": 203933,
+      "canonical_name": "Draymond Green",
+      "alias_name": "Draymond Green",
+      "alias_source": "odds_api",
+      "match_confidence": 1.0,
+      "is_verified": true
+    },
+    {
+      "id": "alias-48",
+      "nba_player_id": 204001,
+      "canonical_name": "Jimmy Butler",
+      "alias_name": "Jimmy Butler",
+      "alias_source": "odds_api",
+      "match_confidence": 1.0,
+      "is_verified": true
+    },
+    {
+      "id": "alias-49",
+      "nba_player_id": 1626162,
+      "canonical_name": "Domantas Sabonis",
+      "alias_name": "Domantas Sabonis",
+      "alias_source": "odds_api",
+      "match_confidence": 1.0,
+      "is_verified": true
+    },
+    {
+      "id": "alias-50",
+      "nba_player_id": 1626162,
+      "canonical_name": "Domantas Sabonis",
+      "alias_name": "Domantas Sabonis",
+      "alias_source": "nba_api",
+      "match_confidence": 1.0,
+      "is_verified": true
+    }
+  ]
+}

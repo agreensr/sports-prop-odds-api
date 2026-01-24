@@ -12,7 +12,14 @@ Key Endpoints:
 """
 import logging
 from typing import List, Optional
-from datetime import datetime, timedelta, UTC
+from datetime import datetime, timedelta
+
+# UTC timezone for Python < 3.11 compatibility
+try:
+    from datetime import UTC
+except ImportError:
+    from datetime import timezone
+    UTC = timezone.utc
 
 from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
 from pydantic import BaseModel

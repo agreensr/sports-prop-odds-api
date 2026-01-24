@@ -17,7 +17,14 @@ New: Starter, back-to-back, high foul risk → 26.2 minutes
 """
 import logging
 from typing import List, Optional, Dict
-from datetime import datetime, UTC
+from datetime import datetime
+
+# UTC timezone for Python < 3.11 compatibility
+try:
+    from datetime import UTC
+except ImportError:
+    from datetime import timezone
+    UTC = timezone.utc
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel

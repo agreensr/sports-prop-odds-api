@@ -18,6 +18,7 @@ from app.api.routes.nba import predictions as nba_predictions, players as nba_pl
 from app.api.routes.nfl import predictions as nfl_predictions
 # Shared routes
 from app.api.routes.shared import accuracy, bets
+from app.api.routes import sync
 
 # Load environment variables from .env file
 from dotenv import load_dotenv
@@ -111,6 +112,7 @@ app.include_router(nfl_predictions.router, prefix="/api/nfl")
 # Shared routes (sport-agnostic) - these keep their own prefixes
 app.include_router(accuracy.router)
 app.include_router(bets.router)
+app.include_router(sync.router)  # Data sync layer
 
 
 @app.get("/")

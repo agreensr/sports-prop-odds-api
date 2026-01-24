@@ -23,7 +23,14 @@ Data Flow:
 """
 import logging
 import uuid
-from datetime import datetime, timedelta, UTC
+from datetime import datetime, timedelta
+
+# UTC timezone for Python < 3.11 compatibility
+try:
+    from datetime import UTC
+except ImportError:
+    from datetime import timezone
+    UTC = timezone.utc
 from typing import Dict, List, Optional, Tuple
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, desc, func

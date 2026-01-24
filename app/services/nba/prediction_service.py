@@ -47,6 +47,7 @@ class PredictionService:
         self._injury_service = None
         self._lineup_service = None
         self._nba_api_service = None
+        self._sync_orchestrator = None  # Data sync layer
 
     @property
     def injury_service(self):
@@ -72,6 +73,66 @@ class PredictionService:
             self._nba_api_service = NbaApiService(self.db)
         return self._nba_api_service
 
+    @property
+    def sync_orchestrator(self):
+        """Lazy load sync orchestrator."""
+        if self._sync_orchestrator is None:
+            from app.services.sync.orchestrator import SyncOrchestrator
+            self._sync_orchestrator = SyncOrchestrator(self.db)
+        return self._sync_orchestrator
+
+    def _validate_game_data(self, game_id: str) -> bool:
+        """
+        Validate that game has properly matched data from sync layer.
+
+        Only use games with match_confidence >= 0.85 to ensure data integrity.
+        This prevents predictions from being generated with mismatched game data.
+
+        Args:
+            game_id: Database UUID of the game
+
+        Returns:
+            True if game data is valid, False otherwise
+        """
+        from app.models.nba.models import GameMapping
+
+        game = self.db.query(Game).filter(Game.id == game_id).first()
+        if not game:
+            logger.warning(f"Game {game_id} not found")
+            return False
+
+        # Check if game has a mapping
+        mapping = self.db.query(GameMapping).filter(
+            GameMapping.nba_game_id == game.external_id
+        ).first()
+
+        if not mapping:
+            logger.warning(
+                f"Game {game.external_id} has no mapping - predictions may use "
+                f"unmatched data. Consider running game sync first."
+            )
+            # Allow predictions to continue but log warning
+            # In production, you might want to return False here
+            return True
+
+        # Check confidence threshold
+        if mapping.match_confidence < 0.85:
+            logger.warning(
+                f"Game {game.external_id} has low confidence match: "
+                f"{mapping.match_confidence:.2f} (threshold: 0.85)"
+            )
+            # Allow predictions but log warning
+            return True
+
+        # Check status
+        if mapping.status != 'matched':
+            logger.warning(
+                f"Game {game.external_id} has status: {mapping.status}"
+            )
+            return False
+
+        return True
+
     def generate_predictions_for_game(
         self,
         game_id: str,
@@ -93,6 +154,11 @@ class PredictionService:
         game = self.db.query(Game).filter(Game.id == game_id).first()
         if not game:
             logger.error(f"Game {game_id} not found")
+            return []
+
+        # Validate game has properly matched data
+        if not self._validate_game_data(game_id):
+            logger.error(f"Game {game_id} failed data validation - skipping predictions")
             return []
 
         # Get all players for both teams

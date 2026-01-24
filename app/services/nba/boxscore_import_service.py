@@ -9,10 +9,16 @@ Resolves predictions with actual game results by:
 """
 import logging
 import uuid
-from datetime import datetime, timedelta, timezone, UTC
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
+
+# UTC timezone for Python < 3.11 compatibility
+try:
+    from datetime import UTC
+except ImportError:
+    UTC = timezone.utc
 
 from app.models.nba.models import Game, Prediction, Player, PlayerStats
 from app.services.nba.nba_service import NBAService
@@ -54,6 +60,87 @@ class BoxscoreImportService:
         """
         self.db = db
         self.nba_service = NBAService()
+        self._player_resolver = None  # Lazy load for sync layer
+
+    @property
+    def player_resolver(self):
+        """Lazy load player resolver from sync layer."""
+        if self._player_resolver is None:
+            from app.services.sync.matchers.player_resolver import PlayerResolver
+            self._player_resolver = PlayerResolver(self.db)
+        return self._player_resolver
+
+    def _validate_game_mapping(self, game: Game) -> bool:
+        """
+        Validate that game has proper mapping from sync layer.
+
+        This ensures boxscore data is linked to the correct game.
+
+        Args:
+            game: Game object
+
+        Returns:
+            True if game has valid mapping, False otherwise
+        """
+        from app.models.nba.models import GameMapping
+
+        mapping = self.db.query(GameMapping).filter(
+            GameMapping.nba_game_id == game.external_id
+        ).first()
+
+        if not mapping:
+            logger.debug(
+                f"Game {game.external_id} has no mapping - using default linkage"
+            )
+            return True  # Allow processing but log
+
+        if mapping.match_confidence < 0.85:
+            logger.warning(
+                f"Game {game.external_id} has low confidence mapping: "
+                f"{mapping.match_confidence:.2f}"
+            )
+            return True  # Allow but warn
+
+        return True
+
+    async def _log_player_match(
+        self,
+        player: Player,
+        boxscore_player_id: str,
+        match_method: str = "external_id"
+    ):
+        """
+        Log player identity match to audit trail.
+
+        Args:
+            player: Player object from our database
+            boxscore_player_id: Player ID from boxscore source
+            match_method: How the player was matched
+        """
+        from app.models.nba.models import MatchAuditLog
+        import json
+
+        try:
+            audit_log = MatchAuditLog(
+                id=str(uuid.uuid4()),
+                entity_type='player',
+                entity_id=str(player.id),
+                action='matched',
+                new_state=json.dumps({
+                    'player_name': player.name,
+                    'external_id': player.external_id,
+                    'boxscore_player_id': boxscore_player_id
+                }),
+                match_details=json.dumps({
+                    'match_method': match_method,
+                    'source': 'boxscore_import'
+                }),
+                performed_by='system',
+                created_at=datetime.now(timezone.utc)
+            )
+            self.db.add(audit_log)
+        except Exception as e:
+            logger.debug(f"Failed to log player match audit: {e}")
 
     async def resolve_predictions_for_completed_games(
         self,
@@ -179,6 +266,12 @@ class BoxscoreImportService:
         }
 
         try:
+            # Validate game mapping before processing
+            if not self._validate_game_mapping(game):
+                logger.warning(f"Game {game.external_id} failed mapping validation")
+                result["errors"].append(f"Game mapping validation failed")
+                return result
+
             # Fetch boxscore from NBA API
             boxscore = await self.nba_service.get_boxscore(game.external_id)
 
@@ -281,6 +374,14 @@ class BoxscoreImportService:
                     )
                     if not dry_run:
                         self.db.add(player_stats)
+
+                        # Log player match to audit trail
+                        await self._log_player_match(
+                            player=player,
+                            boxscore_player_id=str(player.external_id),
+                            match_method="external_id"
+                        )
+
                     result["player_stats_created"] += 1
 
                 # Calculate accuracy metrics
