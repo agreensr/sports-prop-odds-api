@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     PORT: int = 8001
 
     # Database - load from environment with fallback
-    DATABASE_URL: str = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/sports_betting")
+    DATABASE_URL: str = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5433/nba_props")
 
     # NBA API (nba_api library)
     NBA_API_CACHE_TTL: int = 300  # 5 minutes
