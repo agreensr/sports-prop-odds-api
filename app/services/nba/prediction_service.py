@@ -236,7 +236,7 @@ class PredictionService:
         # Check database cache for recent player stats
         cached_stats = self.db.query(PlayerSeasonStats).filter(
             PlayerSeasonStats.player_id == player.id,
-            PlayerSeasonStats.season == "2024-25",
+            PlayerSeasonStats.season == "2025-26",
             PlayerSeasonStats.fetched_at >= datetime.now() - timedelta(hours=48)  # 48-hour cache window
         ).first()
 
