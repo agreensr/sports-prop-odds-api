@@ -6,6 +6,7 @@ per-36 stats, game logs, and roster information.
 """
 import asyncio
 import logging
+import uuid
 from typing import Dict, List
 from sqlalchemy.orm import Session
 
@@ -52,11 +53,10 @@ class NbaDataService:
             await asyncio.sleep(NBA_API_REQUEST_DELAY)
 
             stats = leaguedashplayerstats.LeagueDashPlayerStats(
-                league_id='00',
                 season=season,
-                season_type='Regular Season',
-                measure_type=measure_type,
-                per_mode=per_mode,
+                season_type_all_star='Regular Season',
+                measure_type_detailed_defense=measure_type,
+                per_mode_detailed=per_mode,
                 plus_minus='N',
                 pace_adjust='N',
                 rank='N'
@@ -163,9 +163,6 @@ class NbaDataService:
                     'assists_per_36': player_data.get('AST', 0.0),
                     'threes_per_36': player_data.get('FG3M', 0.0),
                     'avg_minutes': player_data.get('MIN', 0.0),
-                    'fg_percent': player_data.get('FG_PCT', 0.0),
-                    'fg3_percent': player_data.get('FG3_PCT', 0.0),
-                    'ft_percent': player_data.get('FT_PCT', 0.0),
                 }
 
                 if stats:
@@ -174,6 +171,7 @@ class NbaDataService:
                     updated += 1
                 else:
                     stats = PlayerSeasonStats(
+                        id=str(uuid.uuid4()),
                         player_id=player.id,
                         season=season,
                         **stats_dict,
