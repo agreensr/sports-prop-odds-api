@@ -66,19 +66,34 @@ pip install -r requirements.txt
 echo "Dependencies installed"
 ENDSSH
 
-# Step 5: Start service
-echo "Starting service..."
+# Step 5: Create startup script and start service
+echo "Creating startup script..."
 ssh "${REMOTE_USER}@${REMOTE_HOST}" << 'ENDSSH'
+cat > ~/sports-bet-ai-api/start_api.sh << 'EOF'
+#!/bin/bash
 cd ~/sports-bet-ai-api
 source venv/bin/activate
 
-# Load .env if exists
+# Load .env file if it exists
 if [ -f ".env" ]; then
-    export $(grep -v '^#' .env | xargs)
+    set -a
+    source .env
+    set +a
 fi
 
-# Start service
-nohup uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload > uvicorn.log 2>&1 &
+# Start uvicorn
+uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload
+EOF
+
+chmod +x ~/sports-bet-ai-api/start_api.sh
+
+# Kill existing processes
+pkill -9 -f "uvicorn app.main:app" 2>/dev/null || true
+sudo lsof -ti:8001 2>/dev/null | xargs -r sudo kill -9 2>/dev/null || true
+sleep 2
+
+# Start service via script
+nohup bash ~/sports-bet-ai-api/start_api.sh > ~/sports-bet-ai-api/uvicorn.log 2>&1 &
 echo "Service started (PID: $!)"
 ENDSSH
 
