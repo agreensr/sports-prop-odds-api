@@ -262,7 +262,7 @@ class DailyOddsFetchService:
                     props_data = await service.get_event_player_props(game.external_id)
 
                     # Map to prediction updates
-                    updates = mapper.map_player_props_to_predictions(props_data, game)
+                    updates = await mapper.map_player_props_to_predictions(props_data, game)
 
                     # Apply updates with bookmaker priority
                     for update_data in updates:

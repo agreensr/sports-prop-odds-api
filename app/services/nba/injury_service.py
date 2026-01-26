@@ -22,7 +22,7 @@ import httpx
 from datetime import date, datetime, timedelta
 from typing import List, Dict, Optional
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, or_
+from sqlalchemy import and_, or_, func
 import logging
 import uuid
 from pydantic import BaseModel
@@ -560,3 +560,87 @@ class InjuryService:
             self.db.rollback()
 
         return False
+
+    def filter_by_injury_status(
+        self,
+        player_ids: List[str],
+        exclude_statuses: Optional[List[str]] = None
+    ) -> List[str]:
+        """
+        Filter out injured players from a list.
+
+        CRITICAL: This is the main injury filtering method for predictions.
+        Must be called BEFORE generating predictions to exclude unavailable players.
+
+        Args:
+            player_ids: List of player database UUIDs
+            exclude_statuses: Injury statuses to exclude (default: out, doubtful, questionable)
+
+        Returns:
+            Filtered list of player IDs (healthy players only)
+
+        Example:
+            >>> healthy_ids = injury_service.filter_by_injury_status(player_ids)
+            >>> print(f"Filtered: {len(player_ids)} → {len(healthy_ids)}")
+        """
+        if exclude_statuses is None:
+            exclude_statuses = ["out", "doubtful", "questionable"]
+
+        cutoff_date = date.today() - timedelta(days=7)
+
+        # Normalize statuses to uppercase for case-insensitive comparison
+        exclude_statuses_upper = [s.upper() for s in exclude_statuses]
+
+        # Get active injuries for these players
+        injured = self.db.query(PlayerInjury).filter(
+            and_(
+                PlayerInjury.player_id.in_(player_ids),
+                PlayerInjury.reported_date >= cutoff_date,
+                func.upper(PlayerInjury.status).in_(exclude_statuses_upper)
+            )
+        ).all()
+
+        injured_ids = {injury.player_id for injury in injured}
+
+        # Log filtered players with details
+        for injury in injured:
+            player = self.db.query(Player).filter(Player.id == injury.player_id).first()
+            if player:
+                logger.info(
+                    f"Excluding {player.name} - status: {injury.status}, "
+                    f"injury: {injury.injury_type}"
+                )
+            else:
+                logger.info(f"Excluding player {injury.player_id} - status: {injury.status}")
+
+        # Return only healthy players
+        healthy_ids = [pid for pid in player_ids if pid not in injured_ids]
+
+        logger.info(
+            f"Injury filter: {len(player_ids)} → {len(healthy_ids)} "
+            f"(excluded {len(injured_ids)}: {exclude_statuses})"
+        )
+
+        return healthy_ids
+
+    def filter_players_by_injury_status(
+        self,
+        players: List[Player],
+        exclude_statuses: Optional[List[str]] = None
+    ) -> List[Player]:
+        """
+        Filter Player objects by injury status.
+
+        Convenience method that works with Player objects instead of IDs.
+
+        Args:
+            players: List of Player objects
+            exclude_statuses: Injury statuses to exclude
+
+        Returns:
+            Filtered list of Player objects (healthy players only)
+        """
+        player_ids = [p.id for p in players]
+        healthy_ids = set(self.filter_by_injury_status(player_ids, exclude_statuses))
+
+        return [p for p in players if p.id in healthy_ids]

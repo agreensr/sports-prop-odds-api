@@ -48,6 +48,10 @@ class PredictionService:
         self._lineup_service = None
         self._nba_api_service = None
         self._sync_orchestrator = None  # Data sync layer
+        # New prediction enhancement services
+        self._weighted_stats_service = None
+        self._volatility_service = None
+        self._opponent_adjustment_service = None
 
     @property
     def injury_service(self):
@@ -80,6 +84,30 @@ class PredictionService:
             from app.services.sync.orchestrator import SyncOrchestrator
             self._sync_orchestrator = SyncOrchestrator(self.db)
         return self._sync_orchestrator
+
+    @property
+    def weighted_stats_service(self):
+        """Lazy load weighted stats service (EWMA)."""
+        if self._weighted_stats_service is None:
+            from app.services.nba.weighted_stats_service import WeightedStatsService
+            self._weighted_stats_service = WeightedStatsService(self.db)
+        return self._weighted_stats_service
+
+    @property
+    def volatility_service(self):
+        """Lazy load volatility service (CV calculations)."""
+        if self._volatility_service is None:
+            from app.services.nba.volatility_service import VolatilityService
+            self._volatility_service = VolatilityService(self.db)
+        return self._volatility_service
+
+    @property
+    def opponent_adjustment_service(self):
+        """Lazy load opponent adjustment service."""
+        if self._opponent_adjustment_service is None:
+            from app.services.nba.opponent_adjustment_service import OpponentAdjustmentService
+            self._opponent_adjustment_service = OpponentAdjustmentService(self.db)
+        return self._opponent_adjustment_service
 
     def _validate_game_data(self, game_id: str) -> bool:
         """
@@ -312,6 +340,32 @@ class PredictionService:
         else:
             logger.debug(f"No cached stats available for {player.name}, will use fallback")
 
+        # NEW: Try EWMA for recent form adjustment (if we have PlayerStats data)
+        ewma_result = None
+        if per_36_value is not None:
+            try:
+                ewma_result = self.weighted_stats_service.calculate_ewma(
+                    player_id=player.id,
+                    stat_type=stat_type,
+                    games_back=10
+                )
+                if ewma_result["sample_size"] >= 3:
+                    # Apply EWMA adjustment if recent form differs significantly
+                    ewma_multiplier = self.weighted_stats_service.get_ewma_multiplier(
+                        player_id=player.id,
+                        stat_type=stat_type,
+                        games_back=10
+                    )
+                    if ewma_multiplier != 1.0:
+                        original = per_36_value
+                        per_36_value = per_36_value * ewma_multiplier
+                        logger.info(
+                            f"EWMA adjustment for {player.name} {stat_type}: "
+                            f"{original:.2f} → {per_36_value:.2f} ({ewma_multiplier:.2f}x)"
+                        )
+            except Exception as e:
+                logger.debug(f"EWMA calculation failed for {player.name} {stat_type}: {e}")
+
         # STEP 2: Fallback to PlayerStats (most recent game)
         if per_36_value is None:
             player_stats = self.db.query(PlayerStats).filter(
@@ -360,6 +414,33 @@ class PredictionService:
         if teammate_count > 0:
             # Small boost for increased usage
             predicted_value *= (1.0 + min(teammate_count * 0.03, 0.10))
+
+        # NEW: Apply opponent defensive adjustment
+        if game_id:
+            game = self.db.query(Game).filter(Game.id == game_id).first()
+            if game:
+                # Determine opponent team
+                opponent_team = None
+                if player.team == game.home_team:
+                    opponent_team = game.away_team
+                elif player.team == game.away_team:
+                    opponent_team = game.home_team
+
+                if opponent_team:
+                    try:
+                        original_value = predicted_value
+                        predicted_value = self.opponent_adjustment_service.apply_opponent_adjustment(
+                            base_prediction=predicted_value,
+                            opponent_team=opponent_team,
+                            stat_type=stat_type
+                        )
+                        if abs(predicted_value - original_value) > 0.5:
+                            logger.info(
+                                f"Opponent adjustment for {player.name} vs {opponent_team}: "
+                                f"{original_value:.2f} → {predicted_value:.2f}"
+                            )
+                    except Exception as e:
+                        logger.debug(f"Opponent adjustment failed: {e}")
 
         # Minimal variance (5% instead of 15%) since using actual player data
         variance = random.uniform(-0.05, 0.05)
@@ -478,6 +559,32 @@ class PredictionService:
             # Gracefully handle errors - use base confidence
             logger.debug(f"Could not apply hit rate weighting for {player.name} {stat_type}: {e}")
             confidence = base_confidence
+
+        # NEW: Apply volatility penalty based on coefficient of variation
+        try:
+            cv_result = self.volatility_service.calculate_cv(
+                player_id=player.id,
+                stat_type=stat_type,
+                games_back=10
+            )
+
+            if cv_result["sample_size"] >= 3:
+                volatility_penalty = self.volatility_service.get_confidence_penalty(
+                    cv=cv_result["cv"],
+                    stat_type=stat_type
+                )
+                pre_volatility = confidence
+                confidence += volatility_penalty
+
+                if abs(volatility_penalty) > 0.01:
+                    logger.info(
+                        f"Volatility penalty for {player.name} {stat_type}: "
+                        f"CV={cv_result['cv']:.3f} ({cv_result['volatility_level']}) "
+                        f"penalty={volatility_penalty:.3f} "
+                        f"confidence={pre_volatility:.3f}->{confidence:.3f}"
+                    )
+        except Exception as e:
+            logger.debug(f"Volatility penalty calculation failed: {e}")
 
         # Add small randomness to simulate model uncertainty
         confidence += random.uniform(-0.05, 0.05)

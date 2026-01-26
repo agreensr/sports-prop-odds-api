@@ -33,3 +33,6 @@ pytest-mock>=3.12.0
 
 # Fuzzy matching for sync layer
 rapidfuzz>=3.0.0
+
+# Task scheduling
+apscheduler>=3.10.0

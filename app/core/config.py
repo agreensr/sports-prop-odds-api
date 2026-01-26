@@ -36,6 +36,8 @@ class Settings(BaseSettings):
     # NBA API (nba_api library)
     NBA_API_CACHE_TTL: int = 300  # 5 minutes
     NBA_API_TIMEOUT: int = 30  # 30 seconds
+    NBA_API_REQUEST_DELAY: float = 0.6  # Delay between requests to respect rate limits
+    CURRENT_SEASON: str = "2025-26"  # Current NBA season
 
     # The Odds API
     THE_ODDS_API_KEY: str = ""

@@ -115,6 +115,7 @@ def main():
         "011_create_team_mappings.sql",
         "012_create_sync_metadata.sql",
         "013_create_match_audit_log.sql",
+        "015_drop_top_50_players.sql",
     ]
 
     # Run each migration

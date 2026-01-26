@@ -5,8 +5,8 @@ This service provides access to betting odds from bookmakers including:
 - Game odds (moneyline, spread, totals)
 - Player props odds (points, rebounds, assists, etc.)
 
-Free Tier: 500 requests/month
-Strategy: Aggressive caching to minimize usage
+Paid Plan: 20,000 requests/month (~666/day)
+Quota Tracking: Response headers x-requests-remaining, x-requests-used
 """
 import asyncio
 import logging
@@ -24,8 +24,8 @@ class OddsApiService:
     """
     The Odds API service for betting odds.
 
-    Free Tier: 500 requests/month (~16/day)
-    Strategy: Aggressive caching to minimize usage
+    Paid Plan: 20,000 requests/month (~666/day)
+    Quota Tracking: Captures x-requests-remaining and x-requests-used headers
     """
 
     def __init__(self, api_key: str, cache_ttl: int = 600):
@@ -41,6 +41,11 @@ class OddsApiService:
         self._cache: Dict[str, tuple] = {}  # key -> (data, expiry)
         self._lock = asyncio.Lock()
         self._client: Optional[httpx.AsyncClient] = None
+
+        # Quota tracking (from response headers)
+        self._requests_remaining: Optional[int] = None
+        self._requests_used: Optional[int] = None
+        self._quota_last_updated: Optional[datetime] = None
 
     async def _get_client(self) -> httpx.AsyncClient:
         """Get or create HTTP client."""
@@ -90,6 +95,52 @@ class OddsApiService:
             await self._client.aclose()
             self._client = None
 
+    def _update_quota_from_headers(self, response: httpx.Response):
+        """
+        Update quota tracking from response headers.
+
+        The Odds API returns:
+        - x-requests-remaining: Requests left in current billing period
+        - x-requests-used: Requests used in current billing period
+
+        Args:
+            response: HTTP response object
+        """
+        try:
+            remaining = response.headers.get('x-requests-remaining')
+            used = response.headers.get('x-requests-used')
+
+            if remaining:
+                self._requests_remaining = int(remaining)
+            if used:
+                self._requests_used = int(used)
+
+            self._quota_last_updated = datetime.now()
+
+            logger.info(
+                f"The Odds API Quota: {self._requests_remaining} remaining, "
+                f"{self._requests_used} used"
+            )
+        except (ValueError, TypeError) as e:
+            logger.warning(f"Failed to parse quota headers: {e}")
+
+    def get_quota_status(self) -> Dict:
+        """
+        Get current quota status.
+
+        Returns:
+            Dict with remaining/used requests and last update time
+        """
+        return {
+            "requests_remaining": self._requests_remaining,
+            "requests_used": self._requests_used,
+            "last_updated": self._quota_last_updated.isoformat() if self._quota_last_updated else None,
+            "monthly_quota": 20000,
+            "quota_percentage": round(
+                (self._requests_used / 20000 * 100) if self._requests_used else 0, 2
+            )
+        }
+
     # Game Odds Methods
 
     async def get_upcoming_games_with_odds(
@@ -129,6 +180,9 @@ class OddsApiService:
                     params=params
                 )
                 response.raise_for_status()
+
+                # Track quota from response headers
+                self._update_quota_from_headers(response)
 
                 data = response.json()
 
@@ -203,6 +257,9 @@ class OddsApiService:
                 f"{THE_ODDS_API_BASE}/sports/basketball_nba/events/{event_id}/odds",
                 params=params
             )
+
+            # Track quota from response headers
+            self._update_quota_from_headers(response)
 
             if response.status_code == 200:
                 data = response.json()

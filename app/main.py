@@ -19,6 +19,7 @@ from app.api.routes.nfl import predictions as nfl_predictions
 # Shared routes
 from app.api.routes.shared import accuracy, bets
 from app.api.routes import sync
+from app.api.routes.parlays import router as parlays_router
 
 # Load environment variables from .env file
 from dotenv import load_dotenv
@@ -38,6 +39,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
     """Application lifespan events."""
     # Startup
     logger.info(f"Starting {settings.APP_NAME} v{settings.APP_VERSION}")
+
+    # Start the automation scheduler
+    from app.core.scheduler import start_scheduler
+    await start_scheduler()
+    logger.info("✅ Automation scheduler started")
+
     # Skip init_db() for existing databases - tables already exist
     # init_db()
     logger.info("Application started")
@@ -45,6 +52,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
     yield
 
     # Shutdown
+    from app.core.scheduler import stop_scheduler
+    await stop_scheduler()
+    logger.info("✅ Automation scheduler stopped")
     logger.info("Shutting down application")
 
 
@@ -112,6 +122,7 @@ app.include_router(nfl_predictions.router, prefix="/api/nfl")
 # Shared routes (sport-agnostic) - these keep their own prefixes
 app.include_router(accuracy.router)
 app.include_router(bets.router)
+app.include_router(parlays_router)  # New shared parlays routes
 app.include_router(sync.router)  # Data sync layer
 
 
@@ -139,7 +150,8 @@ async def root():
             },
             "shared": {
                 "accuracy": "/api/accuracy",
-                "bets": "/api/bets"
+                "bets": "/api/bets",
+                "parlays": "/api/parlays"
             },
             "docs": "/docs",
             "health": "/health"

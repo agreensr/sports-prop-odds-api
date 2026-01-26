@@ -236,7 +236,7 @@ async def fetch_player_props_for_game(
         props_data = await service.get_event_player_props(game_id)
 
         # Map to prediction updates
-        updates = mapper.map_player_props_to_predictions(props_data, game)
+        updates = await mapper.map_player_props_to_predictions(props_data, game)
 
         updated = 0
         errors = []
@@ -376,7 +376,7 @@ async def update_prediction_odds(
                     props_data = await service.get_event_player_props(game.external_id)
 
                     # Map to prediction updates
-                    updates = mapper.map_player_props_to_predictions(props_data, game)
+                    updates = await mapper.map_player_props_to_predictions(props_data, game)
 
                     for update_data in updates:
                         prediction = db.query(Prediction).filter(

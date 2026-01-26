@@ -204,7 +204,9 @@ def sample_games(db_session: Session, sample_team_mappings):
             away_team="BOS",
             home_team="PHI",
             season=2025,
-            status="scheduled"
+            status="scheduled",
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow()
         ),
         Game(
             id=str(uuid.uuid4()),
@@ -214,7 +216,9 @@ def sample_games(db_session: Session, sample_team_mappings):
             away_team="LAL",
             home_team="GSW",
             season=2025,
-            status="scheduled"
+            status="scheduled",
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow()
         ),
     ]
 

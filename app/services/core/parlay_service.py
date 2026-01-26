@@ -214,6 +214,269 @@ class ParlayService:
         logger.info(f"Generated {len(results)} multi-game parlays")
         return results
 
+    def generate_same_game_parlays_optimized(
+        self,
+        game_id: str,
+        min_confidence: float = 0.65,
+        max_legs: int = 4,
+        min_ev: float = 0.08,
+        limit: int = 50
+    ) -> List[Dict]:
+        """
+        Generate same-game parlays with optimized parameters.
+
+        Higher confidence threshold (0.65) and EV threshold (0.08) for
+        more selective, higher-quality parlays.
+
+        Args:
+            game_id: Database UUID of the game
+            min_confidence: Minimum confidence score (default: 0.65)
+            max_legs: Maximum number of legs (2-4)
+            min_ev: Minimum expected value (default: 0.08)
+            limit: Maximum number of parlays to return
+
+        Returns:
+            List of generated parlay dictionaries
+        """
+        game = self.db.query(Game).filter(Game.id == game_id).first()
+        if not game:
+            logger.error(f"Game {game_id} not found")
+            return []
+
+        # Get high-confidence predictions for this game with odds
+        predictions = self._get_game_predictions(
+            game_id=game_id,
+            min_confidence=min_confidence,
+            has_odds=True
+        )
+
+        if not predictions:
+            logger.warning(f"No qualifying predictions found for game {game.external_id}")
+            return []
+
+        logger.info(f"Found {len(predictions)} predictions for game {game.external_id}")
+
+        # Group predictions by player
+        player_predictions = self._group_predictions_by_player(predictions)
+
+        generated_parlays = []
+
+        # Generate 2-leg same-game parlays (different players)
+        player_ids = list(player_predictions.keys())
+        for i in range(len(player_ids)):
+            for j in range(i + 1, len(player_ids)):
+                player1_id, player2_id = player_ids[i], player_ids[j]
+
+                # Get top prediction for each player
+                preds1 = sorted(
+                    player_predictions[player1_id],
+                    key=lambda x: x["confidence"],
+                    reverse=True
+                )[:1]
+                preds2 = sorted(
+                    player_predictions[player2_id],
+                    key=lambda x: x["confidence"],
+                    reverse=True
+                )[:1]
+
+                if preds1 and preds2:
+                    parlay = self._create_parlay_from_predictions(
+                        predictions=[preds1[0], preds2[0]],
+                        parlay_type="same_game",
+                        correlation_bonus=0.0  # Different players, low correlation
+                    )
+                    if parlay and parlay["expected_value"] >= min_ev:
+                        generated_parlays.append(parlay)
+
+        # Generate 3-leg same-game parlays
+        if len(player_ids) >= 3:
+            for combo in combinations(player_ids, 3):
+                legs = []
+                for pid in combo:
+                    top_pred = sorted(
+                        player_predictions[pid],
+                        key=lambda x: x["confidence"],
+                        reverse=True
+                    )[:1]
+                    if top_pred:
+                        legs.append(top_pred[0])
+
+                if len(legs) == 3:
+                    parlay = self._create_parlay_from_predictions(
+                        predictions=legs,
+                        parlay_type="same_game",
+                        correlation_bonus=0.0
+                    )
+                    if parlay and parlay["expected_value"] >= min_ev:
+                        generated_parlays.append(parlay)
+
+        # Sort by expected value and return top results
+        generated_parlays.sort(key=lambda x: x["expected_value"], reverse=True)
+        results = generated_parlays[:limit]
+
+        # Save parlays to database
+        for parlay_data in results:
+            self._save_parlay(parlay_data, "same_game")
+
+        logger.info(f"Generated {len(results)} optimized same-game parlays for game {game.external_id}")
+        return results
+
+    def generate_cross_game_parlays(
+        self,
+        days_ahead: int = 1,
+        min_confidence: float = 0.65,
+        min_ev: float = 0.08,
+        limit: int = 30
+    ) -> List[Dict]:
+        """
+        Generate 2-leg parlays across different games.
+
+        Independent events (no correlation penalty) across different games.
+
+        Args:
+            days_ahead: Number of days ahead to look for predictions
+            min_confidence: Minimum confidence score
+            min_ev: Minimum expected value
+            limit: Maximum number of parlays to return
+
+        Returns:
+            List of generated parlay dictionaries
+        """
+        # Get upcoming predictions with odds
+        predictions = self._get_upcoming_predictions(
+            days_ahead=days_ahead,
+            min_confidence=min_confidence,
+            has_odds=True
+        )
+
+        if not predictions:
+            logger.warning("No qualifying predictions found for upcoming games")
+            return []
+
+        # Group predictions by game
+        game_predictions = self._group_predictions_by_game(predictions)
+
+        if len(game_predictions) < 2:
+            logger.warning("Need at least 2 games with predictions for cross-game parlays")
+            return []
+
+        generated_parlays = []
+
+        # Get top 2 predictions per game
+        top_predictions_by_game = []
+        for game_id, preds in game_predictions.items():
+            sorted_preds = sorted(preds, key=lambda x: x["confidence"], reverse=True)
+            top_predictions_by_game.append({
+                "game_id": game_id,
+                "predictions": sorted_preds[:2]
+            })
+
+        # Generate 2-leg parlays across different games
+        for i in range(len(top_predictions_by_game)):
+            for j in range(i + 1, len(top_predictions_by_game)):
+                game1 = top_predictions_by_game[i]
+                game2 = top_predictions_by_game[j]
+
+                # Generate all combinations of top predictions
+                for pred1 in game1["predictions"]:
+                    for pred2 in game2["predictions"]:
+                        parlay = self._create_parlay_from_predictions(
+                            predictions=[pred1, pred2],
+                            parlay_type="multi_game",
+                            correlation_bonus=0.0  # No correlation across games
+                        )
+                        if parlay and parlay["expected_value"] >= min_ev:
+                            generated_parlays.append(parlay)
+
+        # Sort by expected value and return top results
+        generated_parlays.sort(key=lambda x: x["expected_value"], reverse=True)
+        results = generated_parlays[:limit]
+
+        # Save parlays to database
+        for parlay_data in results:
+            self._save_parlay(parlay_data, "multi_game")
+
+        logger.info(f"Generated {len(results)} cross-game parlays")
+        return results
+
+    def generate_combo_parlays(
+        self,
+        days_ahead: int = 1,
+        min_ev: float = 0.10,
+        limit: int = 20
+    ) -> List[Dict]:
+        """
+        Generate 4-leg combo parlays by combining two 2-leg parlays.
+
+        Combines the best 2-leg cross-game parlays into higher-payout
+        4-leg combo parlays.
+
+        Args:
+            days_ahead: Number of days ahead to look for predictions
+            min_ev: Minimum expected value for component 2-leg parlays
+            limit: Maximum number of combo parlays to return
+
+        Returns:
+            List of generated 4-leg combo parlay dictionaries
+        """
+        # First, generate 2-leg cross-game parlays
+        two_leg_parlays = self.generate_cross_game_parlays(
+            days_ahead=days_ahead,
+            min_confidence=0.65,
+            min_ev=min_ev,
+            limit=limit * 2  # Get more to have better combinations
+        )
+
+        if len(two_leg_parlays) < 2:
+            logger.warning("Need at least 2 two-leg parlays to create combos")
+            return []
+
+        generated_combos = []
+
+        # Combine pairs of 2-leg parlays into 4-leg combos
+        for i in range(len(two_leg_parlays)):
+            for j in range(i + 1, len(two_leg_parlays)):
+                parlay1 = two_leg_parlays[i]
+                parlay2 = two_leg_parlays[j]
+
+                # Combine legs from both parlays
+                combined_legs = parlay1["legs"] + parlay2["legs"]
+
+                # Check for duplicate player-stat combinations
+                leg_signatures = set()
+                has_duplicate = False
+                for leg in combined_legs:
+                    signature = f"{leg['player_id']}_{leg['stat_type']}"
+                    if signature in leg_signatures:
+                        has_duplicate = True
+                        break
+                    leg_signatures.add(signature)
+
+                if has_duplicate:
+                    continue  # Skip combinations with duplicates
+
+                # Calculate combo parlay metrics
+                combo = self._create_parlay_from_predictions(
+                    predictions=combined_legs,
+                    parlay_type="multi_game",
+                    correlation_bonus=0.0  # Independent across games
+                )
+
+                if combo and combo["expected_value"] >= min_ev * 1.5:  # Higher EV threshold for 4-leg
+                    combo["source_parlays"] = [parlay1.get("id"), parlay2.get("id")]
+                    generated_combos.append(combo)
+
+        # Sort by expected value and return top results
+        generated_combos.sort(key=lambda x: x["expected_value"], reverse=True)
+        results = generated_combos[:limit]
+
+        # Save parlays to database
+        for parlay_data in results:
+            self._save_parlay(parlay_data, "multi_game")
+
+        logger.info(f"Generated {len(results)} 4-leg combo parlays")
+        return results
+
     def get_parlays(
         self,
         parlay_type: Optional[str] = None,
@@ -303,7 +566,13 @@ class ParlayService:
         min_confidence: float,
         has_odds: bool = False
     ) -> List[Dict]:
-        """Get predictions for a specific game."""
+        """Get predictions for a specific game.
+
+        Args:
+            game_id: Database UUID of the game
+            min_confidence: Minimum confidence score
+            has_odds: Whether to filter for predictions with odds
+        """
         query = (
             self.db.query(Prediction, Player, Game)
             .join(Player, Prediction.player_id == Player.id)
@@ -330,7 +599,13 @@ class ParlayService:
         min_confidence: float,
         has_odds: bool = False
     ) -> List[Dict]:
-        """Get predictions for upcoming games."""
+        """Get predictions for upcoming games.
+
+        Args:
+            days_ahead: Number of days ahead to look
+            min_confidence: Minimum confidence score
+            has_odds: Whether to filter for predictions with odds
+        """
         start_date = date.today()
         end_date = start_date + timedelta(days=days_ahead)
 

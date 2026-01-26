@@ -1,20 +1,23 @@
 """Sync API routes for data synchronization health and management.
 
 Provides endpoints for:
+- Scheduler control (start/stop/status)
 - Sync health monitoring
 - Manual sync triggers
 - Reviewing unmatched games
 - Querying matched data
+- Triggering individual jobs
 """
 import logging
 from datetime import date, datetime
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 
 from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.services.sync.orchestrator import SyncOrchestrator
+from app.core.scheduler import get_scheduler
 
 logger = logging.getLogger(__name__)
 
@@ -304,3 +307,251 @@ async def validate_game_mapping(
         'status': mapping.status,
         'last_validated_at': mapping.last_validated_at.isoformat() if mapping.last_validated_at else None
     }
+
+
+# ============================================================================
+# SCHEDULER CONTROL ENDPOINTS
+# ============================================================================
+
+@router.get("/scheduler/status")
+async def get_scheduler_status() -> Dict:
+    """
+    Get the current status of the automation scheduler.
+
+    Returns:
+        Scheduler status including running state and job list
+    """
+    scheduler = get_scheduler()
+
+    if scheduler is None:
+        return {
+            'running': False,
+            'message': 'Scheduler not initialized'
+        }
+
+    jobs = scheduler.scheduler.get_jobs() if scheduler.scheduler else []
+
+    job_list = []
+    for job in jobs:
+        next_run = job.next_run_time
+        job_list.append({
+            'id': job.id,
+            'name': job.name,
+            'next_run': next_run.isoformat() if next_run else None,
+            'trigger': str(job.trigger)
+        })
+
+    return {
+        'running': scheduler.running,
+        'jobs': job_list,
+        'total_jobs': len(jobs)
+    }
+
+
+@router.post("/scheduler/start")
+async def start_scheduler() -> Dict:
+    """
+    Start the automation scheduler.
+
+    This will initialize all scheduled background tasks.
+
+    Returns:
+        Status message
+    """
+    from app.core.scheduler import start_scheduler
+
+    if get_scheduler() is not None and get_scheduler().running:
+        return {
+            'message': 'Scheduler already running',
+            'running': True
+        }
+
+    await start_scheduler()
+
+    return {
+        'message': 'Scheduler started successfully',
+        'running': True
+    }
+
+
+@router.post("/scheduler/stop")
+async def stop_scheduler() -> Dict:
+    """
+    Stop the automation scheduler.
+
+    This will stop all scheduled background tasks.
+
+    Returns:
+        Status message
+    """
+    from app.core.scheduler import stop_scheduler
+
+    if get_scheduler() is None or not get_scheduler().running:
+        return {
+            'message': 'Scheduler not running',
+            'running': False
+        }
+
+    await stop_scheduler()
+
+    return {
+        'message': 'Scheduler stopped successfully',
+        'running': False
+    }
+
+
+@router.post("/scheduler/jobs/trigger/{job_id}")
+async def trigger_job(
+    job_id: str,
+    db: Session = Depends(get_db)
+) -> Dict:
+    """
+    Manually trigger a scheduled job by ID.
+
+    Available job IDs:
+    - games_fetch: Fetch NBA games schedule
+    - odds_fetch_game_time: Fetch odds (game hours)
+    - odds_fetch_off_hours: Fetch odds (off hours)
+    - player_stats_update: Update player stats
+    - injury_fetch: Fetch injury data
+    - lineup_fetch: Fetch lineup data
+    - predictions_daily: Generate daily predictions
+    - result_verification: Verify prediction results
+
+    Args:
+        job_id: The ID of the job to trigger
+
+    Returns:
+        Job execution result
+    """
+    scheduler = get_scheduler()
+
+    if scheduler is None:
+        raise HTTPException(
+            status_code=400,
+            detail='Scheduler not running. Start the scheduler first.'
+        )
+
+    # Find the job
+    job = None
+    for j in scheduler.scheduler.get_jobs():
+        if j.id == job_id:
+            job = j
+            break
+
+    if not job:
+        raise HTTPException(
+            status_code=404,
+            detail=f'Job {job_id} not found'
+        )
+
+    # Trigger the job
+    try:
+        job.func()
+        logger.info(f"✅ Manually triggered job: {job_id}")
+
+        return {
+            'message': f'Job {job_id} triggered successfully',
+            'job_id': job_id,
+            'job_name': job.name
+        }
+
+    except Exception as e:
+        logger.error(f"❌ Failed to trigger job {job_id}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f'Job execution failed: {str(e)}'
+        )
+
+
+@router.get("/scheduler/jobs")
+async def list_scheduled_jobs() -> Dict:
+    """
+    List all scheduled automation jobs with details.
+
+    Returns:
+        List of all scheduled jobs with their schedules and next run times
+    """
+    scheduler = get_scheduler()
+
+    if scheduler is None:
+        return {
+            'running': False,
+            'jobs': []
+        }
+
+    jobs = []
+
+    for job in scheduler.scheduler.get_jobs():
+        next_run = job.next_run_time
+
+        # Parse trigger for human-readable schedule
+        trigger_str = str(job.trigger)
+
+        jobs.append({
+            'id': job.id,
+            'name': job.name,
+            'trigger': trigger_str,
+            'next_run': next_run.isoformat() if next_run else None,
+            'last_run': None  # APScheduler doesn't track last run by default
+        })
+
+    return {
+        'running': scheduler.running,
+        'total_jobs': len(jobs),
+        'jobs': jobs
+    }
+
+
+@router.get("/odds-api/quota")
+async def get_odds_api_quota(db: Session = Depends(get_db)) -> Dict:
+    """
+    Get The Odds API quota status.
+
+    Returns the current quota usage including:
+    - requests_remaining: Requests left in current billing period
+    - requests_used: Requests used in current billing period
+    - monthly_quota: Total monthly quota (20,000 for paid plan)
+    - quota_percentage: Percentage of quota used
+
+    This endpoint makes a test API call to get fresh quota data.
+    """
+    from app.core.config import settings
+    from app.services.core.odds_api_service import OddsApiService
+
+    service = OddsApiService(api_key=settings.THE_ODDS_API_KEY)
+
+    try:
+        # Make a lightweight request to get fresh quota data
+        import httpx
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                "https://api.the-odds-api.com/v4/sports",
+                params={"apiKey": settings.THE_ODDS_API_KEY},
+                timeout=10.0
+            )
+
+            # Extract quota from headers
+            remaining = response.headers.get('x-requests-remaining')
+            used = response.headers.get('x-requests-used')
+
+            if remaining and used:
+                return {
+                    "requests_remaining": int(remaining),
+                    "requests_used": int(used),
+                    "monthly_quota": 20000,
+                    "quota_percentage": round((int(used) / 20000) * 100, 2),
+                    "last_updated": datetime.utcnow().isoformat()
+                }
+            else:
+                return {
+                    "error": "Quota headers not found in response",
+                    "status_code": response.status_code
+                }
+    except Exception as e:
+        logger.error(f"Failed to fetch quota: {e}")
+        return {
+            "error": str(e),
+            "message": "Failed to fetch quota from The Odds API"
+        }
+
