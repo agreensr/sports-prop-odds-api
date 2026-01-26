@@ -41,10 +41,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
     logger.info(f"Starting {settings.APP_NAME} v{settings.APP_VERSION}")
 
     # Start the automation scheduler
-    # TEMPORARILY DISABLED for VPS deployment
-    # from app.core.scheduler import start_scheduler
-    # await start_scheduler()
-    # logger.info("✅ Automation scheduler started")
+    from app.core.scheduler import start_scheduler
+    await start_scheduler()
+    logger.info("✅ Automation scheduler started")
 
     # Skip init_db() for existing databases - tables already exist
     # init_db()
@@ -53,9 +52,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
     yield
 
     # Shutdown
-    # from app.core.scheduler import stop_scheduler
-    # await stop_scheduler()
-    # logger.info("✅ Automation scheduler stopped")
+    from app.core.scheduler import stop_scheduler
+    await stop_scheduler()
+    logger.info("✅ Automation scheduler stopped")
     logger.info("Shutting down application")
 
 
