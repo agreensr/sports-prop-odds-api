@@ -229,6 +229,11 @@ class ParlayService:
         Higher confidence threshold (0.65) and EV threshold (0.08) for
         more selective, higher-quality parlays.
 
+        Parlay rules:
+        - 2-leg parlays from different players (any over/under)
+        - 2-leg parlays from same player: ONLY if both legs are UNDER
+        - 3+ leg parlays: Any combination allowed
+
         Args:
             game_id: Database UUID of the game
             min_confidence: Minimum confidence score (default: 0.65)
@@ -289,7 +294,24 @@ class ParlayService:
                     if parlay and parlay["expected_value"] >= min_ev:
                         generated_parlays.append(parlay)
 
-        # Generate 3-leg same-game parlays
+        # Generate 2-leg same-player parlays (BOTH UNDER only - conservative)
+        for player_id, preds in player_predictions.items():
+            # Get all UNDER predictions for this player
+            under_preds = [p for p in preds if p.get("recommendation") == "UNDER"]
+
+            # Need at least 2 UNDER predictions for same-player parlay
+            if len(under_preds) >= 2:
+                # Generate combinations of 2 UNDER predictions
+                for combo in combinations(under_preds, 2):
+                    parlay = self._create_parlay_from_predictions(
+                        predictions=list(combo),
+                        parlay_type="same_game",
+                        correlation_bonus=self._calculate_same_player_correlation(combo)
+                    )
+                    if parlay and parlay["expected_value"] >= min_ev:
+                        generated_parlays.append(parlay)
+
+        # Generate 3-leg same-game parlays (any combination)
         if len(player_ids) >= 3:
             for combo in combinations(player_ids, 3):
                 legs = []
