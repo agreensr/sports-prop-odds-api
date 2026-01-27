@@ -591,7 +591,11 @@ class ParlayService:
             )
 
         results = query.all()
-        return [self._prediction_to_dict(p, player, game) for p, player, game in results]
+        all_predictions = [self._prediction_to_dict(p, player, game) for p, player, game in results]
+
+        # Deduplicate: Keep only ONE prediction per player_id + stat_type
+        # Select based on highest predicted_value (most accurate model)
+        return self._deduplicate_predictions(all_predictions)
 
     def _get_upcoming_predictions(
         self,
@@ -630,7 +634,10 @@ class ParlayService:
             )
 
         results = query.all()
-        return [self._prediction_to_dict(p, player, game) for p, player, game in results]
+        all_predictions = [self._prediction_to_dict(p, player, game) for p, player, game in results]
+
+        # Deduplicate: Keep only ONE prediction per player_id + stat_type
+        return self._deduplicate_predictions(all_predictions)
 
     def _group_predictions_by_player(self, predictions: List[Dict]) -> Dict[str, List[Dict]]:
         """Group predictions by player ID."""
@@ -651,6 +658,47 @@ class ParlayService:
                 grouped[game_id] = []
             grouped[game_id].append(pred)
         return grouped
+
+    def _deduplicate_predictions(self, predictions: List[Dict]) -> List[Dict]:
+        """
+        Remove duplicate predictions for same player/stat combination.
+
+        When multiple predictions exist for the same player and stat type,
+        select the best one based on:
+        1. Highest predicted_value (more accurate model)
+        2. Highest confidence
+        3. Most recent odds_fetched_at
+
+        Returns:
+            Deduplicated list of predictions
+        """
+        # Group by player_id + stat_type
+        by_key = {}
+        for pred in predictions:
+            key = f"{pred['player_id']}_{pred['stat_type']}"
+            if key not in by_key:
+                by_key[key] = []
+            by_key[key].append(pred)
+
+        # Select best prediction for each key
+        deduplicated = []
+        for key, preds in by_key.items():
+            # Sort by: predicted_value (desc), confidence (desc), odds_fetched_at (desc)
+            best = max(preds, key=lambda p: (
+                p.get("predicted_value", 0),
+                p.get("confidence", 0),
+                p.get("odds_fetched_at") or ""
+            ))
+            deduplicated.append(best)
+
+            # Log if we removed duplicates
+            if len(preds) > 1:
+                logger.debug(
+                    f"Deduplicated {key}: kept pred_value={best['predicted_value']:.2f}, "
+                    f"removed {len(preds) - 1} duplicate(s)"
+                )
+
+        return deduplicated
 
     def _calculate_parlay_metrics(
         self,
