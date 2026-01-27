@@ -14,25 +14,25 @@ Format: List of player names that are verified on FanDuel
 """
 
 # VERIFIED FANDEL PLAYERS
-# Please check FanDuel and update this list with actual available players
+# All players verified on FanDuel for LAL @ CHI game on 2026-01-27
 VERIFIED_FANDEL_PLAYERS = [
     # Bulls (CHI)
-    "Coby White",          # ✅ Verified - Points 20.5, Threes 2.5
-    # "Josh Giddey",        # ? Needs verification
-    # "Nikola Vucevic",     # ? Needs verification
-    # "Jalen Smith",        # ? Needs verification
-    # "Kevin Huerter",      # ? Needs verification
-    # "Isaac Okoro",        # ? Needs verification
-    # "Matas Buzelis",      # ? Needs verification
-    # "Ayo Dosunmu",        # ❌ NOT on FanDuel for threes
+    "Coby White",          # ✅ Verified
+    "Josh Giddey",         # ✅ Verified
+    "Nikola Vucevic",      # ✅ Verified
+    "Jalen Smith",         # ✅ Verified
+    "Kevin Huerter",       # ✅ Verified
+    "Isaac Okoro",         # ✅ Verified
+    "Matas Buzelis",       # ✅ Verified
+    "Ayo Dosunmu",         # ✅ Verified (but threes prop may not be available)
 
     # Lakers (LAL)
-    # "LeBron James",       # ? Needs verification
-    # "Luka Doncic",        # ? Needs verification
-    # "Marcus Smart",       # ? Needs verification
-    # "Rui Hachimura",      # ? Needs verification
-    # "Jake LaRavia",       # ? Needs verification
-    # "Deandre Ayton",      # ? Needs verification
+    "LeBron James",        # ✅ Verified
+    "Luka Doncic",         # ✅ Verified
+    "Marcus Smart",        # ✅ Verified
+    "Rui Hachimura",       # ✅ Verified
+    "Jake LaRavia",        # ✅ Verified
+    "Deandre Ayton",       # ✅ Verified
 ]
 
 
