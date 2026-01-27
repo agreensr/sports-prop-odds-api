@@ -1,0 +1,117 @@
+/* ============================================================================
+   TeamsPage Styles
+   ============================================================================ */
+
+.teams-page {
+  min-height: 100vh;
+}
+
+.page-header {
+  padding: var(--spacing-xl) 0;
+  text-align: center;
+  border-bottom: 1px solid var(--color-border-default);
+}
+
+.page-header h1 {
+  font-size: 2rem;
+  font-weight: 700;
+  margin-bottom: var(--spacing-sm);
+}
+
+.page-header p {
+  font-size: 1rem;
+  color: var(--color-text-tertiary);
+}
+
+.loading {
+  padding: var(--spacing-2xl);
+  text-align: center;
+  color: var(--color-text-tertiary);
+}
+
+.error-state {
+  padding: var(--spacing-2xl);
+  text-align: center;
+}
+
+.error-message {
+  font-size: 1.125rem;
+  font-weight: 500;
+  color: var(--color-error);
+  margin-bottom: var(--spacing-sm);
+}
+
+.error-hint {
+  font-size: 0.875rem;
+  color: var(--color-text-tertiary);
+}
+
+.teams-content {
+  padding: var(--spacing-xl) 0;
+}
+
+.conference-section {
+  margin-bottom: var(--spacing-2xl);
+}
+
+.conference-section h2 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-bottom: var(--spacing-lg);
+  color: var(--color-text-primary);
+}
+
+.teams-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: var(--spacing-md);
+}
+
+.team-link {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  padding: var(--spacing-md);
+  background-color: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-md);
+  text-decoration: none;
+  transition: all 0.15s ease;
+}
+
+.team-link:hover {
+  border-color: var(--color-border-hover);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+  text-decoration: none;
+}
+
+.team-logo-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: white;
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+}
+
+.team-info {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.team-name {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.team-city {
+  font-size: 0.75rem;
+  color: var(--color-text-tertiary);
+}

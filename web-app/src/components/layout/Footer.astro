@@ -1,0 +1,129 @@
+---
+// ============================================================================
+// Footer.astro - App footer with links and info
+// ============================================================================
+
+const currentYear = new Date().getFullYear();
+---
+
+<footer class="footer">
+  <div class="container">
+    <div class="footer-content">
+      <!-- Logo & Tagline -->
+      <div class="footer-brand">
+        <div class="footer-logo">
+          <svg width="24" height="24" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="16" cy="16" r="14" stroke="#dc2626" stroke-width="2" fill="none"/>
+            <path d="M10 16h12M16 10v12" stroke="#dc2626" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+          <span>NBA AI</span>
+        </div>
+        <p class="footer-tagline">AI-powered NBA predictions and sports betting insights</p>
+      </div>
+
+      <!-- Legal & Info -->
+      <div class="footer-legal">
+        <p class="legal-text">
+          Predictions are for informational purposes only. Please gamble responsibly.
+        </p>
+        <p class="copyright">
+          &copy; {currentYear} NBA Sports Betting AI. All rights reserved.
+        </p>
+      </div>
+
+      <!-- API Status -->
+      <div class="footer-api">
+        <span class="api-label">API Status:</span>
+        <span class="api-status" id="footer-api-status">Checking...</span>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<style>
+  .footer {
+    margin-top: auto;
+    padding: var(--spacing-xl) 0;
+    background-color: var(--color-bg-secondary);
+    border-top: 1px solid var(--color-border-default);
+  }
+
+  .footer-content {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr;
+    gap: var(--spacing-xl);
+    align-items: start;
+  }
+
+  .footer-brand {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+  }
+
+  .footer-logo {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--color-text-primary);
+  }
+
+  .footer-logo svg {
+    flex-shrink: 0;
+  }
+
+  .footer-tagline {
+    font-size: 0.875rem;
+    color: var(--color-text-tertiary);
+    max-width: 300px;
+  }
+
+  .footer-legal {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+  }
+
+  .legal-text {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+  }
+
+  .copyright {
+    font-size: 0.75rem;
+    color: var(--color-text-tertiary);
+  }
+
+  .footer-api {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xs);
+  }
+
+  .api-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--color-text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .api-status {
+    font-size: 0.75rem;
+    color: var(--color-text-secondary);
+  }
+
+  @media (max-width: 768px) {
+    .footer-content {
+      grid-template-columns: 1fr;
+      gap: var(--spacing-lg);
+    }
+
+    .footer-legal,
+    .footer-api {
+      text-align: center;
+    }
+  }
+</style>

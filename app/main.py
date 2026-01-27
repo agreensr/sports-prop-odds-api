@@ -20,6 +20,8 @@ from app.api.routes.nfl import predictions as nfl_predictions
 from app.api.routes.shared import accuracy, bets
 from app.api.routes import sync
 from app.api.routes.parlays import router as parlays_router
+# Admin routes
+from app.api.routes.admin import deploy as admin_deploy
 
 # Load environment variables from .env file
 from dotenv import load_dotenv
@@ -124,6 +126,7 @@ app.include_router(accuracy.router)
 app.include_router(bets.router)
 app.include_router(parlays_router)  # New shared parlays routes
 app.include_router(sync.router)  # Data sync layer
+app.include_router(admin_deploy.router)  # Admin deployment routes
 
 
 @app.get("/")
@@ -152,6 +155,11 @@ async def root():
                 "accuracy": "/api/accuracy",
                 "bets": "/api/bets",
                 "parlays": "/api/parlays"
+            },
+            "admin": {
+                "deploy": "/api/admin/deploy/deploy",
+                "status": "/api/admin/deploy/status",
+                "webhook": "/api/admin/deploy/webhook"
             },
             "docs": "/docs",
             "health": "/health"

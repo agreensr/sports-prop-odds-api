@@ -1,0 +1,229 @@
+/* ============================================================================
+   ParlaysPage Styles
+   ============================================================================ */
+
+.parlays-page {
+  min-height: 100vh;
+}
+
+.page-header {
+  padding: var(--spacing-xl) 0;
+  text-align: center;
+  border-bottom: 1px solid var(--color-border-default);
+}
+
+.page-header h1 {
+  font-size: 2rem;
+  font-weight: 700;
+  margin-bottom: var(--spacing-sm);
+}
+
+.page-header p {
+  font-size: 1rem;
+  color: var(--color-text-tertiary);
+}
+
+.loading, .error, .empty-state {
+  padding: var(--spacing-2xl);
+  text-align: center;
+  color: var(--color-text-tertiary);
+}
+
+.error p {
+  margin-bottom: var(--spacing-md);
+}
+
+.btn {
+  padding: var(--spacing-sm) var(--spacing-md);
+  font-size: 0.875rem;
+  font-weight: 600;
+  border-radius: var(--radius-md);
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-primary {
+  background-color: var(--color-brand-600);
+  color: white;
+}
+
+.btn-primary:hover {
+  background-color: var(--color-brand-700);
+}
+
+/* Parlays List */
+.parlays-list {
+  padding: var(--spacing-xl) 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg);
+}
+
+.parlay-card {
+  background-color: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  transition: all 0.15s ease;
+}
+
+.parlay-card:hover {
+  border-color: var(--color-border-hover);
+  box-shadow: var(--shadow-md);
+}
+
+.parlay-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-md) var(--spacing-lg);
+  background-color: var(--color-bg-tertiary);
+  border-bottom: 1px solid var(--color-border-default);
+}
+
+.parlay-title {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.legs-count {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.game-date {
+  font-size: 0.75rem;
+  color: var(--color-text-tertiary);
+}
+
+.parlay-odds {
+  text-align: right;
+}
+
+.odds-value {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--color-brand-600);
+}
+
+.parlay-body {
+  padding: var(--spacing-md) var(--spacing-lg);
+}
+
+.legs-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.leg-item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  padding: var(--spacing-sm);
+  background-color: var(--color-bg-primary);
+  border-radius: var(--radius-md);
+}
+
+.leg-number {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  background-color: var(--color-brand-600);
+  color: white;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.leg-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.leg-info .player-name {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.leg-info .stat-line {
+  font-size: 0.75rem;
+  color: var(--color-text-tertiary);
+}
+
+.leg-odds {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.parlay-footer {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md) var(--spacing-lg);
+  background-color: var(--color-bg-tertiary);
+  border-top: 1px solid var(--color-border-default);
+}
+
+.ev-indicator,
+.probability-indicator,
+.payout-indicator {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-xs);
+  text-align: center;
+}
+
+.ev-label,
+.probability-label,
+.payout-label {
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.ev-value {
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.ev-value.high { color: #22c55e; }
+.ev-value.medium { color: #eab308; }
+.ev-value.low { color: #ef4444; }
+
+.probability-value,
+.payout-value {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+@media (max-width: 768px) {
+  .parlay-footer {
+    grid-template-columns: 1fr;
+    gap: var(--spacing-md);
+  }
+
+  .parlay-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--spacing-sm);
+  }
+
+  .parlay-odds {
+    text-align: left;
+  }
+}
