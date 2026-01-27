@@ -14,6 +14,7 @@ from sqlalchemy import and_
 
 from app.models.nba.models import Parlay, ParlayLeg, Prediction, Game, Player
 from app.utils.timezone import utc_to_central, format_game_time_central
+from app.core.fanduel_whitelist import is_fanduel_verified
 
 logger = logging.getLogger(__name__)
 
@@ -669,6 +670,8 @@ class ParlayService:
         2. Highest confidence
         3. Most recent odds_fetched_at
 
+        Also filters to only include verified FanDuel players.
+
         Returns:
             Deduplicated list of predictions
         """
@@ -689,7 +692,15 @@ class ParlayService:
                 p.get("confidence", 0),
                 p.get("odds_fetched_at") or ""
             ))
-            deduplicated.append(best)
+
+            # Only include verified FanDuel players
+            player_name = best.get("player_name", "")
+            if is_fanduel_verified(player_name):
+                deduplicated.append(best)
+            else:
+                logger.debug(
+                    f"Filtered out non-verified FanDuel player: {player_name}"
+                )
 
             # Log if we removed duplicates
             if len(preds) > 1:
