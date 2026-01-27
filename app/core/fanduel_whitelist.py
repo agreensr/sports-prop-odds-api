@@ -24,7 +24,7 @@ VERIFIED_FANDEL_PLAYERS = [
     "Kevin Huerter",       # ✅ Verified
     "Isaac Okoro",         # ✅ Verified
     "Matas Buzelis",       # ✅ Verified
-    "Ayo Dosunmu",         # ✅ Verified (but threes prop may not be available)
+    # "Ayo Dosunmu",       # ❌ NOT on FanDuel for threes
 
     # Lakers (LAL)
     "LeBron James",        # ✅ Verified
