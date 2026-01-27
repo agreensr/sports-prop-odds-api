@@ -126,7 +126,7 @@ app.include_router(accuracy.router)
 app.include_router(bets.router)
 app.include_router(parlays_router)  # New shared parlays routes
 app.include_router(sync.router)  # Data sync layer
-app.include_router(admin_deploy.router)  # Admin deployment routes
+app.include_router(admin_deploy.router, prefix="/api/admin")  # Admin deployment routes
 
 
 @app.get("/")
@@ -157,7 +157,7 @@ async def root():
                 "parlays": "/api/parlays"
             },
             "admin": {
-                "deploy": "/api/admin/deploy/deploy",
+                "deploy": "/api/admin/deploy",
                 "status": "/api/admin/deploy/status",
                 "webhook": "/api/admin/deploy/webhook"
             },

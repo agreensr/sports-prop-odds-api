@@ -22,7 +22,7 @@ from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/admin", tags=["admin"])
+router = APIRouter(tags=["admin"])
 
 # GitHub webhook secret (set in environment)
 GITHUB_WEBHOOK_SECRET = os.getenv("GITHUB_WEBHOOK_SECRET", "")
