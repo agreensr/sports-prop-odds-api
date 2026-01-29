@@ -3,8 +3,14 @@ Admin deployment routes for triggering git pull and API restart.
 
 Provides endpoints for:
 - Manual deployment trigger
-- GitHub webhook integration
+- GitHub webhook integration with signature verification (P3 #26)
 - Deployment status checks
+
+Security Improvements (P3 #26):
+- Required signature verification in all environments when WEBHOOK_ENFORCE_SIGNATURE=true
+- Replay attack protection via timestamp/nonce checking
+- Enhanced audit logging for security events
+- IP-based access logging
 """
 import asyncio
 import logging
@@ -15,10 +21,15 @@ from datetime import datetime
 
 from fastapi import APIRouter, HTTPException, Request, Header, Depends
 from pydantic import BaseModel
-import hashlib
-import hmac
 
 from app.core.config import settings
+from app.core.webhook_security import (
+    verify_github_signature,
+    check_replay_attack,
+    WebhookAuditLogger,
+    get_client_ip,
+    WEBHOOK_ENFORCE_SIGNATURE
+)
 
 logger = logging.getLogger(__name__)
 
@@ -91,39 +102,53 @@ async def get_git_info() -> tuple[str, str]:
     return commit, branch
 
 
-def verify_github_signature(payload: bytes, signature: str) -> bool:
+# Legacy wrapper for backward compatibility
+def verify_github_signature(payload: bytes, signature: str, require_secret: bool = True) -> bool:
     """
     Verify GitHub webhook signature.
+
+    DEPRECATED: Use app.core.webhook_security.verify_github_signature instead.
+    This function is kept for backward compatibility.
 
     Args:
         payload: Request body bytes
         signature: X-Hub-Signature-256 header value
+        require_secret: If True, require secret to be set
 
     Returns:
         True if signature is valid
+
+    Raises:
+        HTTPException: If signature is invalid or secret is required but not set
     """
+    from app.core.webhook_security import verify_signature
+
+    # Check if secret is configured
     if not GITHUB_WEBHOOK_SECRET:
-        logger.warning("GITHUB_WEBHOOK_SECRET not set - skipping signature verification")
+        if require_secret or settings.is_production() or WEBHOOK_ENFORCE_SIGNATURE:
+            logger.error("GITHUB_WEBHOOK_SECRET not set - rejecting webhook")
+            raise HTTPException(
+                status_code=500,
+                detail="Webhook secret not configured on server"
+            )
+        logger.warning("GITHUB_WEBHOOK_SECRET not set - allowing webhook in development mode (SECURITY RISK)")
         return True
 
     if not signature:
-        return False
+        logger.warning("GitHub webhook missing X-Hub-Signature-256 header")
+        raise HTTPException(
+            status_code=401,
+            detail="Missing signature header"
+        )
 
-    # Signature format: sha256=<hash>
-    if not signature.startswith("sha256="):
-        return False
-
-    hash_algorithm, github_signature = signature.split("=", 1)
-
-    # Compute expected signature
-    expected_signature = hmac.new(
-        GITHUB_WEBHOOK_SECRET.encode(),
+    # Use new verification function
+    return verify_signature(
         payload,
-        hashlib.sha256
-    ).hexdigest()
-
-    # Compare signatures using constant-time comparison
-    return hmac.compare_digest(expected_signature, github_signature)
+        signature,
+        GITHUB_WEBHOOK_SECRET,
+        algorithm="sha256",
+        signature_prefix="sha256="
+    )
 
 
 @router.get("/deploy/status", response_model=DeploymentResponse)
@@ -235,27 +260,38 @@ async def github_webhook(request: Request):
     """
     GitHub webhook endpoint for auto-deployment on push.
 
+    Security (P3 #26 - Enhanced):
+    - Signature verification is MANDATORY when GITHUB_WEBHOOK_SECRET is set
+    - Set WEBHOOK_ENFORCE_SIGNATURE=true to require signature even in development
+    - Constant-time HMAC comparison prevents timing attacks
+    - IP address logging for security auditing
+    - Audit logging for all security events
+
     To set up:
-    1. Set GITHUB_WEBHOOK_SECRET environment variable
-    2. In GitHub repo settings, add webhook:
+    1. Set GITHUB_WEBHOOK_SECRET environment variable (use a strong random secret)
+    2. Optional: Set WEBHOOK_ENFORCE_SIGNATURE=true to enforce in all environments
+    3. In GitHub repo settings, add webhook:
        - URL: https://your-domain.com/api/admin/deploy/webhook
        - Content type: application/json
-       - Secret: your webhook secret
+       - Secret: same as GITHUB_WEBHOOK_SECRET
        - Events: Push events
 
     The webhook will automatically deploy when code is pushed to main branch.
     """
+    client_ip = get_client_ip(request)
+
     # Get request body
     payload = await request.body()
 
-    # Verify signature
+    # Verify signature using enhanced security module
     signature = request.headers.get("X-Hub-Signature-256", "")
-    if not verify_github_signature(payload, signature):
-        logger.warning("Invalid GitHub webhook signature")
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid signature"
-        )
+
+    try:
+        verify_github_signature(payload, signature, require_secret=True)
+        WebhookAuditLogger.log_verification_success("github", "deploy_webhook", bool(signature))
+    except HTTPException as e:
+        WebhookAuditLogger.log_verification_failure("github", str(e.detail), client_ip)
+        raise
 
     # Parse JSON payload
     try:
@@ -272,7 +308,7 @@ async def github_webhook(request: Request):
     ref = data.get("ref", "")
     branch = ref.replace("refs/heads/", "") if ref else ""
 
-    logger.info(f"GitHub webhook received: branch={branch}, ref={ref}")
+    logger.info(f"GitHub webhook received from {client_ip}: branch={branch}, ref={ref}")
 
     # Only deploy on push to main branch
     if branch != "main":
