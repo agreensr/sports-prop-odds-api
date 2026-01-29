@@ -546,6 +546,30 @@ class BasePredictionService(ABC):
 
         return None
 
+    def _get_position_stat_match_for_confidence(
+        self,
+        position: Optional[str],
+        stat_type: str
+    ) -> bool:
+        """
+        Check if the stat type matches the position's primary stat.
+
+        This is a helper for confidence calculation and is extracted to avoid
+        duplication across sport services.
+
+        Args:
+            position: Player position
+            stat_type: Stat type being predicted
+
+        Returns:
+            True if stat is the primary stat for this position
+        """
+        if not position:
+            return False
+
+        position_stat_match = self.get_position_stat_match()
+        return position_stat_match.get(position) == stat_type
+
     def _calculate_confidence(
         self,
         player: Any,
@@ -593,29 +617,52 @@ class BasePredictionService(ABC):
         )
 
         if season_stats:
-            games_played = getattr(season_stats, 'games_played', 0)
-
-            # Sample size boosts
-            if games_played >= 50:
-                confidence += 0.12  # High confidence
-            elif games_played >= 20:
-                confidence += 0.06  # Moderate confidence
-            elif games_played >= 8:
-                confidence += 0.03  # Low confidence
-            elif games_played >= 4:
-                confidence += 0.02  # Minimal confidence
+            confidence += self._calculate_sample_size_confidence(
+                season_stats, player, stat_type
+            )
 
         # Position-stat alignment boost
-        position = player.position if player.position else None
-        position_stat_match = self.get_position_stat_match()
-
-        if position and position_stat_match.get(position) == stat_type:
+        if self._get_position_stat_match_for_confidence(player.position, stat_type):
             confidence += 0.06
 
         # Add small randomness
         confidence += random.uniform(-0.03, 0.03)
 
         return round(max(0.30, min(0.75, confidence)), 2)
+
+    def _calculate_sample_size_confidence(
+        self,
+        season_stats: Any,
+        player: Any,
+        stat_type: str
+    ) -> float:
+        """
+        Calculate confidence boost based on sample size.
+
+        This method can be overridden for sport-specific sample size logic.
+        Default implementation uses games_played with standard thresholds.
+
+        Args:
+            season_stats: PlayerSeasonStats instance
+            player: Player instance
+            stat_type: Stat type
+
+        Returns:
+            Confidence boost to add to base confidence
+        """
+        games_played = getattr(season_stats, 'games_played', 0)
+
+        # Sample size boosts
+        if games_played >= 50:
+            return 0.12  # High confidence
+        elif games_played >= 20:
+            return 0.06  # Moderate confidence
+        elif games_played >= 8:
+            return 0.03  # Low confidence
+        elif games_played >= 4:
+            return 0.02  # Minimal confidence
+
+        return 0.0
 
     def _get_recommendation(self, confidence: float) -> str:
         """

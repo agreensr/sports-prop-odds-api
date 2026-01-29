@@ -157,50 +157,24 @@ class PredictionService(BasePredictionService):
         logger.debug(f"Using season stats for {player.name}: {stat_type} = {predicted_value:.2f}/game")
         return predicted_value
 
-    def _calculate_confidence(
+    def _calculate_sample_size_confidence(
         self,
+        season_stats: PlayerSeasonStats,
         player: Player,
-        stat_type: str,
-        predicted_value: float,
-        game: Game
+        stat_type: str
     ) -> float:
         """
         NHL uses games_played for sample size with hockey-specific thresholds.
         """
-        SeasonStats = self.get_season_stats_model()
-
-        confidence = 0.50
-
-        # Build season stats query
-        filters = [
-            SeasonStats.player_id == player.id,
-            SeasonStats.season == game.season,
-            SeasonStats.season_type == "REG"
-        ]
-
-        season_stats = self.db.query(SeasonStats).filter(*filters).first()
-
-        if season_stats:
-            games_played = getattr(season_stats, 'games_played', 0)
-            if games_played >= 50:
-                confidence += 0.12  # High confidence with substantial sample
-            elif games_played >= 20:
-                confidence += 0.06  # Moderate confidence
-            elif games_played >= 10:
-                confidence += 0.03  # Low confidence
-            # No boost for < 10 games (too small sample)
-
-        # Position-stat alignment boost
-        position = player.position if player.position else None
-        position_stat_match = self.get_position_stat_match()
-
-        if position and position_stat_match.get(position) == stat_type:
-            confidence += 0.06
-
-        # Add small randomness
-        confidence += random.uniform(-0.03, 0.03)
-
-        return round(max(0.30, min(0.75, confidence)), 2)
+        games_played = getattr(season_stats, 'games_played', 0)
+        if games_played >= 50:
+            return 0.12  # High confidence with substantial sample
+        elif games_played >= 20:
+            return 0.06  # Moderate confidence
+        elif games_played >= 10:
+            return 0.03  # Low confidence
+        # No boost for < 10 games (too small sample)
+        return 0.0
 
     def _get_recommendation(self, confidence: float) -> str:
         """NHL uses 0.58 threshold for recommendations."""

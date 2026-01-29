@@ -1,5 +1,11 @@
 """
-NHL-specific services.
+NHL prediction services.
 
-This module is reserved for future NHL-specific business logic.
+This module contains all NHL-specific prediction services.
 """
+from app.services.nhl.prediction_service import PredictionService, get_prediction_service
+
+__all__ = [
+    "PredictionService",
+    "get_prediction_service",
+]
