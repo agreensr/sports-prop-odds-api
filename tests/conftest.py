@@ -20,7 +20,8 @@ sys.path.insert(0, str(PROJECT_ROOT))
 @pytest.fixture(scope="function")
 def db_session() -> Generator[Session, None, None]:
     """Create fresh test database session with isolated in-memory database."""
-    from app.models.nba.models import Base
+    from app.models.unified import Base
+    from app.models import Sport
 
     # Use shared cache for in-memory database to allow multiple connections
     # to see the same data. This is needed because TestClient may create
@@ -31,19 +32,31 @@ def db_session() -> Generator[Session, None, None]:
         connect_args={"check_same_thread": False}
     )
 
-    # Create tables individually to handle duplicate index errors
-    # The models have both index=True on columns AND explicit Index() in __table_args__
-    for table in Base.metadata.sorted_tables:
-        try:
-            table.create(bind=engine, checkfirst=True)
-        except Exception as e:
-            # Ignore "index already exists" errors - the index was created by unique=True
-            if "already exists" not in str(e) and "duplicate" not in str(e).lower():
-                raise
+    # Create all tables - use checkfirst to handle repeated calls
+    # In SQLite, CREATE TABLE IF NOT EXISTS handles this, but indexes don't
+    # So we use try/except for index creation
+    try:
+        Base.metadata.create_all(bind=engine, checkfirst=True)
+    except Exception as e:
+        # Ignore duplicate index/index already exists errors
+        if "already exists" not in str(e).lower() and "duplicate" not in str(e).lower():
+            raise
 
     # Create session
     TestSessionLocal = sessionmaker(bind=engine)
     session = TestSessionLocal()
+
+    # Initialize sport registry
+    for sport_id, name in [("nba", "NBA"), ("nfl", "NFL"), ("mlb", "MLB"), ("nhl", "NHL")]:
+        sport = Sport(
+            id=sport_id,
+            name=name,
+            active=True,
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow()
+        )
+        session.add(sport)
+    session.commit()
 
     yield session
 
@@ -52,9 +65,16 @@ def db_session() -> Generator[Session, None, None]:
 
 
 @pytest.fixture(scope="function")
-async def async_client() -> AsyncGenerator[AsyncClient, None]:
+async def async_client(db_session: Session) -> AsyncGenerator[AsyncClient, None]:
     """Create async HTTP client for testing FastAPI endpoints."""
     from app.main import app
+    from app.core.database import get_db
+
+    # Override database dependency to use test session
+    def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
 
     async with AsyncClient(
         transport=ASGITransport(app=app),
@@ -62,11 +82,13 @@ async def async_client() -> AsyncGenerator[AsyncClient, None]:
     ) as client:
         yield client
 
+    app.dependency_overrides.clear()
+
 
 @pytest.fixture
 def sample_team_mappings(db_session: Session):
     """Create sample team mappings for testing."""
-    from app.models.nba.models import TeamMapping
+    from app.models import TeamMapping
 
     teams = [
         TeamMapping(
@@ -129,7 +151,7 @@ def sample_team_mappings(db_session: Session):
 @pytest.fixture
 def sample_player_aliases(db_session: Session):
     """Create sample player aliases for testing."""
-    from app.models.nba.models import PlayerAlias
+    from app.models import PlayerAlias
 
     aliases = [
         PlayerAlias(
@@ -194,7 +216,7 @@ def sample_player_aliases(db_session: Session):
 @pytest.fixture
 def sample_games(db_session: Session, sample_team_mappings):
     """Create sample NBA games for testing."""
-    from app.models.nba.models import Game
+    from app.models import Game
 
     today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
 
@@ -278,7 +300,7 @@ def create_game_mapping(**kwargs):
             match_confidence=1.0
         )
     """
-    from app.models.nba.models import GameMapping
+    from app.models import GameMapping
 
     defaults = {
         'id': str(uuid.uuid4()),
@@ -323,7 +345,7 @@ def test_client(db_session):
     from fastapi.testclient import TestClient
     from app.main import app
     from app.core.database import get_db
-    from app.models.nba.models import Player, Game
+    from app.models import Player, Game
 
     # Ensure tables exist by querying once (this also helps with connection pooling)
     # This is needed because in-memory SQLite with cache=shared still needs
