@@ -19,7 +19,7 @@ from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 
 from app.services.sync.matchers.game_matcher import GameMatcher
-from app.models.nba.models import GameMapping, MatchAuditLog
+from app.models import GameMapping, MatchAuditLog
 
 
 class TestGameMatcher:

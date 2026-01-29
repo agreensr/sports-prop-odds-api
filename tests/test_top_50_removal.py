@@ -287,7 +287,7 @@ class TestParlayGenerationWithoutTop50:
     ):
         """Verify ParlayService works when using injury filtering instead of top_50."""
         from app.services.core.parlay_service import ParlayService
-        from app.models.nba.models import Player, Prediction, PlayerInjury
+        from app.models import Player, Prediction, PlayerInjury
         from datetime import datetime
         import uuid
 

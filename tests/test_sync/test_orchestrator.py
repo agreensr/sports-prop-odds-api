@@ -27,7 +27,7 @@ from conftest import create_game_mapping
 from sqlalchemy.orm import Session
 
 from app.services.sync.orchestrator import SyncOrchestrator
-from app.models.nba.models import (
+from app.models import (
     GameMapping, PlayerAlias, TeamMapping,
     SyncMetadata, MatchAuditLog
 )

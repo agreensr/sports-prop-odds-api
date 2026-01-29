@@ -19,7 +19,7 @@ from datetime import datetime, date
 from sqlalchemy.orm import Session
 
 from app.services.sync.matchers.player_resolver import PlayerResolver
-from app.models.nba.models import PlayerAlias
+from app.models import PlayerAlias
 
 
 class TestPlayerResolver:

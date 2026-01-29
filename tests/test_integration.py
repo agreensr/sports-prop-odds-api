@@ -26,7 +26,7 @@ sys.path.insert(0, PROJECT_ROOT)
 
 from sqlalchemy.orm import Session
 
-from app.models.nba.models import (
+from app.models import (
     Player, Game, Prediction, PlayerStats, PlayerSeasonStats,
     Parlay, ParlayLeg, GameOdds, PlayerInjury, ExpectedLineup
 )

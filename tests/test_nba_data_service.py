@@ -19,7 +19,7 @@ import pandas as pd
 from sqlalchemy.orm import Session
 
 from app.services.nba.nba_data_service import NbaDataService
-from app.models.nba.models import Player, PlayerSeasonStats
+from app.models import Player, PlayerSeasonStats
 
 
 class TestNbaDataServiceFetchAllPlayerStats:

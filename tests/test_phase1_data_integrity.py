@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
 
-from app.models.nba.models import Base, Sport, Player, Game, Prediction
+from app.models import Base, Sport, Player, Game, Prediction
 from app.services.core.identity_resolver import (
     PlayerIdentityResolver,
     GameIdentityResolver

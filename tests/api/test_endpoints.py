@@ -29,7 +29,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 @pytest.fixture
 def sample_players_data(db_session):
     """Create sample player data for testing endpoints."""
-    from app.models.nba.models import Player
+    from app.models import Player
 
     now = datetime.now(UTC)
     players = []
@@ -66,7 +66,7 @@ def sample_players_data(db_session):
 @pytest.fixture
 def sample_games_data(db_session, sample_players_data):
     """Create sample game data for testing endpoints."""
-    from app.models.nba.models import Game
+    from app.models import Game
 
     now = datetime.now(UTC)
     games = []
@@ -99,7 +99,7 @@ def sample_games_data(db_session, sample_players_data):
 @pytest.fixture
 def sample_predictions_data(db_session, sample_players_data, sample_games_data):
     """Create sample prediction data for testing endpoints."""
-    from app.models.nba.models import Prediction
+    from app.models import Prediction
 
     now = datetime.now(UTC)
     predictions = []

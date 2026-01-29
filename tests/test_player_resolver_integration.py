@@ -23,7 +23,7 @@ from sqlalchemy.orm import Session
 from unittest.mock import Mock, patch, AsyncMock
 
 from app.services.data_sources.odds_mapper import OddsMapper
-from app.models.nba.models import Player, PlayerAlias, Game, Prediction, TeamMapping
+from app.models import Player, PlayerAlias, Game, Prediction, TeamMapping
 
 
 class TestPlayerResolverIntegration:
