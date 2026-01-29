@@ -102,11 +102,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
     except Exception as e:
         logger.warning(f"Failed to initialize tracing: {e}")
 
-    # Initialize Prometheus metrics
-    instrumentator = Instrumentator()
-    instrumentator.instrument(app).expose(app, endpoint="/metrics", include_in_schema=False)
-    logger.info("Prometheus metrics initialized at /metrics")
-
     # Start the automation scheduler
     from app.core.scheduler import start_scheduler
     await start_scheduler()
@@ -140,6 +135,12 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # Add correlation ID middleware (must be added before CORS for proper header handling)
 app.add_middleware(CorrelationIdMiddleware)
+
+# Initialize Prometheus metrics BEFORE including routes
+# This must happen before any routes are added to the app
+instrumentator = Instrumentator()
+instrumentator.instrument(app).expose(app, endpoint="/metrics", include_in_schema=False)
+logger.info("Prometheus metrics initialized at /metrics")
 
 # Configure CORS
 app.add_middleware(
