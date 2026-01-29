@@ -35,7 +35,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import and_, desc, func, case
 import statistics
 
-from app.models.nba.models import (
+from app.models import (
     Player,
     Game,
     PlayerStats,

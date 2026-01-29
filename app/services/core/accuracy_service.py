@@ -19,7 +19,7 @@ try:
 except ImportError:
     UTC = timezone.utc
 
-from app.models.nba.models import Prediction, Player, Game
+from app.models import Prediction, Player, Game
 
 logger = logging.getLogger(__name__)
 

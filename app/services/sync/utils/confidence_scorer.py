@@ -2,6 +2,10 @@
 
 Calculates confidence scores (0.0 to 1.0) for matching entities across APIs.
 Higher scores indicate more reliable matches.
+
+Improvements (P1 #11):
+- Conservative team match boost (+0.05 instead of +0.10)
+- Clearer thresholds for match confidence levels
 """
 from datetime import datetime, timedelta, time
 from typing import Dict, Any, Optional
@@ -9,6 +13,12 @@ from typing import Dict, Any, Optional
 from sqlalchemy.orm import Session
 
 from app.services.sync.utils.name_normalizer import normalize, normalize_team_name, are_names_equal
+
+# Match thresholds for consistency across the codebase
+TEAM_MATCH_BOOST = 0.05        # Reduced from 0.10 to reduce false positives
+POSITION_MATCH_BOOST = 0.03    # Boost when position also matches
+AUTO_ACCEPT_THRESHOLD = 0.85   # Auto-accept matches at or above this
+MANUAL_REVIEW_THRESHOLD = 0.70 # Require review below this
 
 
 async def calculate_game_match_confidence(
@@ -39,7 +49,7 @@ async def calculate_game_match_confidence(
     Returns:
         Confidence score between 0.0 and 1.0
     """
-    from app.models.nba.models import TeamMapping
+    from app.models import TeamMapping
 
     # Extract dates
     nba_date = nba_game['game_date']
@@ -147,7 +157,7 @@ def _fuzzy_team_match(nba_team_id: int, odds_team_name: str, db: Session) -> flo
     Returns:
         Confidence score 0.0 to 1.0
     """
-    from app.models.nba.models import TeamMapping
+    from app.models import TeamMapping
 
     # Try exact match via team_mappings
     mapping = db.query(TeamMapping).filter(
@@ -241,11 +251,11 @@ async def calculate_player_match_confidence(
     else:
         return 0.0
 
-    # Boost confidence if context supports the match
+    # Apply conservative boosts (updated for P1 #11)
     if context.get('team_match'):
-        confidence += 0.05
+        confidence += TEAM_MATCH_BOOST
     if context.get('position_match'):
-        confidence += 0.03
+        confidence += POSITION_MATCH_BOOST
 
     return min(confidence, 1.0)
 

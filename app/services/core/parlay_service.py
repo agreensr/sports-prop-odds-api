@@ -12,7 +12,7 @@ from itertools import combinations
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import and_
 
-from app.models.nba.models import Parlay, ParlayLeg, Prediction, Game, Player
+from app.models import Parlay, ParlayLeg, Prediction, Game, Player
 from app.utils.timezone import utc_to_central, format_game_time_central
 from app.core.fanduel_whitelist import is_fanduel_verified
 

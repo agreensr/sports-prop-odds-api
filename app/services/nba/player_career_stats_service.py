@@ -21,7 +21,7 @@ from datetime import datetime, timedelta
 from typing import List, Dict, Optional
 from sqlalchemy.orm import Session
 
-from app.models.nba.models import Player
+from app.models import Player
 
 logger = logging.getLogger(__name__)
 

@@ -30,7 +30,7 @@ except ImportError:
     from datetime import timezone
     UTC = timezone.utc
 
-from app.models.nba.models import PlayerStats
+from app.models import PlayerStats
 
 logger = logging.getLogger(__name__)
 

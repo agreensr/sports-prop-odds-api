@@ -32,7 +32,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import and_
 
 from app.core.database import get_db
-from app.models.nba.models import Game, Player, ExpectedLineup
+from app.models import Game, Player, ExpectedLineup
 from app.services.nba.minutes_projection_service import MinutesProjectionService
 
 logger = logging.getLogger(__name__)

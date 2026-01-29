@@ -6,7 +6,7 @@ from typing import List, Optional, Dict
 from datetime import datetime
 from sqlalchemy.orm import Session
 
-from app.models.nba.models import PlacedBet, PlacedBetLeg, Game, Prediction, Player
+from app.models import PlacedBet, PlacedBetLeg, Game, Prediction, Player
 
 logger = logging.getLogger(__name__)
 

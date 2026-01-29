@@ -35,7 +35,7 @@ from typing import Dict, List, Optional, Tuple
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, desc, func
 
-from app.models.nba.models import (
+from app.models import (
     HistoricalOddsSnapshot,
     Player,
     Game,

@@ -32,7 +32,7 @@ except ImportError:
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
 
-from app.models.nba.models import (
+from app.models import (
     HistoricalOddsSnapshot,
     Player,
     Game,

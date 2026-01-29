@@ -378,7 +378,7 @@ class AutomationScheduler:
                     game_date = today + timedelta(days=days_ahead)
 
                     # Fetch games for this date
-                    from app.models.nba.models import Game
+                    from app.models import Game
                     games = db.query(Game).filter(
                         Game.game_date >= game_date,
                         Game.game_date < game_date + timedelta(days=1),

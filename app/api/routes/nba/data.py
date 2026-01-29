@@ -20,7 +20,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query
 from sqlalchemy.orm import Session
 
-from app.models.nba.models import Game, Player, Prediction
+from app.models import Game, Player, Prediction
 from app.services.nba.nba_service import NBAService
 from app.services.core.odds_api_service import get_odds_service
 from app.services.data_sources.odds_mapper import OddsMapper

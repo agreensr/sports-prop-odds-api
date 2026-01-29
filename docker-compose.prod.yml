@@ -1,0 +1,42 @@
+# =============================================================================
+# Docker Compose Production Override
+# =============================================================================
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.prod.yml up
+#
+# This file extends the base docker-compose.yml with production-specific
+# configurations for the app service.
+# =============================================================================
+
+version: '3.8'
+
+services:
+  app:
+    # Production-specific overrides
+    environment:
+      ENVIRONMENT: production
+      DEBUG: "false"
+      LOG_LEVEL: WARNING
+      RATE_LIMIT_ENABLED: "true"
+
+    # Use restart policy
+    restart: always
+
+    # No volume mounts in production (logs should be handled externally)
+    volumes: []
+
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+    # Production logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"

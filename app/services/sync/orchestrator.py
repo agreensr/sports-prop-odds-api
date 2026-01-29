@@ -25,7 +25,7 @@ from app.services.sync.matchers.game_matcher import GameMatcher
 from app.services.sync.matchers.player_resolver import PlayerResolver
 from app.services.sync.adapters.nba_api_adapter import NbaApiAdapter
 from app.services.sync.adapters.odds_api_adapter import OddsApiAdapter
-from app.models.nba.models import (
+from app.models import (
     GameMapping, PlayerAlias, TeamMapping, SyncMetadata, MatchAuditLog
 )
 

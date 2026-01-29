@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 from typing import List, Dict, Optional, Any
 from sqlalchemy.orm import Session
 
-from app.models.nba.models import Game, GameOdds, Player, Prediction
+from app.models import Game, GameOdds, Player, Prediction
 from app.services.sync.matchers.player_resolver import PlayerResolver
 
 logger = logging.getLogger(__name__)

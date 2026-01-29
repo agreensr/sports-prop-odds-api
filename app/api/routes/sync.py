@@ -279,7 +279,7 @@ async def validate_game_mapping(
     Returns:
         Validation result
     """
-    from app.models.nba.models import GameMapping
+    from app.models import GameMapping
 
     # Try to find by nba_game_id or odds_event_id
     mapping = db.query(GameMapping).filter(

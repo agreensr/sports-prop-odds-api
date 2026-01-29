@@ -18,7 +18,7 @@ from app.core.database import get_db
 from app.core.config import settings
 from app.services.core.odds_api_service import get_odds_service
 from app.services.data_sources.odds_mapper import OddsMapper
-from app.models.nba.models import Game, GameOdds, Player, Prediction
+from app.models import Game, GameOdds, Player, Prediction
 
 logger = logging.getLogger(__name__)
 

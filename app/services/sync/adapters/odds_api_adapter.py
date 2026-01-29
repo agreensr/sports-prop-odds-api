@@ -188,7 +188,7 @@ class OddsApiAdapter:
         Returns:
             Team mapping dict or None
         """
-        from app.models.nba.models import TeamMapping
+        from app.models import TeamMapping
 
         mapping = self.db.query(TeamMapping).filter(
             TeamMapping.odds_api_name == odds_team_name

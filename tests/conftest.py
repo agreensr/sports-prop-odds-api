@@ -22,9 +22,12 @@ def db_session() -> Generator[Session, None, None]:
     """Create fresh test database session with isolated in-memory database."""
     from app.models.nba.models import Base
 
-    # Use unique in-memory database for each test
+    # Use shared cache for in-memory database to allow multiple connections
+    # to see the same data. This is needed because TestClient may create
+    # additional connections when processing requests.
+    # See: https://docs.sqlalchemy.org/en/20/dialects/sqlite.html#sqlite-foreign-keys
     engine = create_engine(
-        "sqlite:///:memory:",
+        "sqlite:///:memory:?cache=shared",
         connect_args={"check_same_thread": False}
     )
 
@@ -295,3 +298,52 @@ def create_game_mapping(**kwargs):
     }
     defaults.update(kwargs)
     return GameMapping(**defaults)
+
+
+# =============================================================================
+# FASTAPI TEST CLIENT FIXTURE
+# =============================================================================
+
+@pytest.fixture(scope="function")
+def test_client(db_session):
+    """
+    Create FastAPI TestClient with a fresh database for each test.
+
+    The TestClient provides a synchronous interface for testing FastAPI endpoints
+    without making actual network calls. All requests are processed in-memory.
+
+    Note: We don't use context manager (with TestClient) because it conflicts
+    with Prometheus middleware that's added during app module initialization.
+
+    Usage:
+        def test_endpoint(test_client):
+            response = test_client.get("/api/nba/players")
+            assert response.status_code == 200
+    """
+    from fastapi.testclient import TestClient
+    from app.main import app
+    from app.core.database import get_db
+    from app.models.nba.models import Player, Game
+
+    # Ensure tables exist by querying once (this also helps with connection pooling)
+    # This is needed because in-memory SQLite with cache=shared still needs
+    # at least one query to properly initialize the connection
+    db_session.query(Player).count()
+
+    # Store reference to db_session in a closure
+    # This ensures the same session is used for all requests
+    test_db_session = db_session
+
+    def override_get_db():
+        try:
+            yield test_db_session
+        finally:
+            pass
+
+    app.dependency_overrides[get_db] = override_get_db
+
+    # Create client without context manager to avoid middleware conflict
+    client = TestClient(app)
+    yield client
+
+    app.dependency_overrides.clear()

@@ -60,15 +60,24 @@ class NBAService:
 
     Provides cached access to NBA.com endpoints with configurable TTL.
     All methods are async but wrap the synchronous nba_api calls.
+
+    Cache TTL is dynamic based on NBA season status:
+    - Active season (Oct-Jun): 5 minutes for fresh data
+    - Offseason (Jul-Sep): 24 hours since data changes less frequently
     """
 
-    def __init__(self, cache_ttl: int = 300):
+    def __init__(self, cache_ttl: Optional[int] = None):
         """
         Initialize NBA service.
 
         Args:
-            cache_ttl: Default cache TTL in seconds (default: 5 minutes)
+            cache_ttl: Override cache TTL in seconds. If None, uses dynamic
+                      TTL based on NBA season status (5 min season, 24h offseason).
         """
+        if cache_ttl is None:
+            from app.core.config import get_dynamic_cache_ttl
+            cache_ttl = get_dynamic_cache_ttl("nba")
+
         self.cache_ttl = cache_ttl
         self._cache: Dict[str, CacheEntry] = {}
         self._lock = asyncio.Lock()

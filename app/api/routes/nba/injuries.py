@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
-from app.models.nba.models import PlayerInjury, Player
+from app.models import PlayerInjury, Player
 from app.core.database import get_db
 from app.services.nba.injury_service import InjuryService
 

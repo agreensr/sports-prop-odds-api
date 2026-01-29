@@ -9,20 +9,55 @@ from sqlalchemy.orm import relationship, declarative_base
 Base = declarative_base()
 
 
+class Sport(Base):
+    """Sports registry for multi-sport support."""
+    __tablename__ = "sports"
+
+    id = Column(String(3), primary_key=True)  # 'nba', 'nfl', 'mlb', 'nhl'
+    name = Column(String(50), nullable=False)  # Display name
+    active = Column(Boolean, nullable=False, default=True, index=True)
+    created_at = Column(DateTime, nullable=False)
+    updated_at = Column(DateTime, nullable=False)
+
+    __table_args__ = (
+        Index('ix_sports_active', 'active'),
+    )
+
+
 class Player(Base):
-    """NBA Player model with support for multiple external ID sources (ESPN, NBA)."""
+    """
+    Multi-sport Player model with support for multiple external ID sources.
+
+    Updated for Phase 1: Multi-source ID support with dedicated columns per API.
+    This prevents the duplicate player issue by tracking IDs from all sources.
+    """
     __tablename__ = "players"
 
     id = Column(String(36), primary_key=True)  # character varying(36)
-    external_id = Column(String(100), unique=True, nullable=False, index=True)  # NBA or ESPN ID
-    id_source = Column(String(10), nullable=False, index=True, default='nba')  # 'nba' or 'espn'
-    nba_api_id = Column(Integer, nullable=True, index=True)  # nba_api numeric ID (for nba_api package)
-    name = Column(String(255), nullable=False, index=True)
+
+    # Multi-sport support
+    sport_id = Column(String(3), ForeignKey("sports.id"), nullable=False, index=True, default='nba')  # 'nba', 'nfl', 'mlb', 'nhl'
+
+    # Legacy fields (for backward compatibility)
+    external_id = Column(String(100), unique=True, nullable=False, index=True)  # Deprecated - use odds_api_id
+    id_source = Column(String(10), nullable=False, index=True, default='nba')  # Deprecated
+
+    # Multi-source ID columns (dedicated per API)
+    odds_api_id = Column(String(100), nullable=True, index=True)  # The Odds API player ID
+    nba_api_id = Column(Integer, nullable=True, index=True)  # NBA.com API ID
+    espn_id = Column(Integer, nullable=True, index=True)  # ESPN API ID
+    nfl_id = Column(Integer, nullable=True, index=True)  # NFL API ID
+    mlb_id = Column(Integer, nullable=True, index=True)  # MLB API ID
+    nhl_id = Column(Integer, nullable=True, index=True)  # NHL API ID
+
+    # Player information
+    canonical_name = Column(String(255), nullable=True, index=True)  # Standardized name across sources
+    name = Column(String(255), nullable=False, index=True)  # Display name from source
     team = Column(String(3), nullable=False, index=True)  # Team abbreviation (3 chars)
     position = Column(String(10))
     active = Column(Boolean, nullable=False, index=True)
-    last_roster_check = Column(DateTime, nullable=True, index=True)  # Last validated against nba_api
-    data_source = Column(String(50), nullable=True, index=True)  # nba_api, espn, manual, etc.
+    last_roster_check = Column(DateTime, nullable=True, index=True)  # Last validated against source API
+    data_source = Column(String(50), nullable=True, index=True)  # odds_api, nba_api, espn, manual, etc.
     created_at = Column(DateTime, nullable=False)
     updated_at = Column(DateTime, nullable=False)
 
@@ -36,16 +71,36 @@ class Player(Base):
     __table_args__ = (
         Index('ix_players_external_id', 'external_id'),
         Index('ix_players_id_source', 'id_source'),
+        Index('ix_players_sport_id', 'sport_id'),
+        Index('ix_players_canonical_name', 'canonical_name'),
+        Index('ix_players_odds_api_id', 'odds_api_id'),
     )
 
 
 class Game(Base):
-    """NBA Game model with support for multiple external ID sources (ESPN, NBA)."""
+    """
+    Multi-sport Game model with support for multiple external ID sources.
+
+    Updated for Phase 1: Multi-source ID support with natural key unique constraint.
+    The natural key (sport_id, game_date, away_team, home_team) prevents duplicates.
+    """
     __tablename__ = "games"
 
     id = Column(String(36), primary_key=True)
-    external_id = Column(String(100), unique=True, nullable=False, index=True)  # NBA or ESPN game ID
-    id_source = Column(String(10), nullable=False, index=True, default='nba')  # 'nba' or 'espn'
+
+    # Multi-sport support
+    sport_id = Column(String(3), ForeignKey("sports.id"), nullable=False, index=True, default='nba')  # 'nba', 'nfl', 'mlb', 'nhl'
+
+    # Legacy fields (for backward compatibility)
+    external_id = Column(String(100), unique=True, nullable=False, index=True)  # Deprecated - use odds_api_event_id
+    id_source = Column(String(10), nullable=False, index=True, default='nba')  # Deprecated
+
+    # Multi-source ID columns (dedicated per API)
+    odds_api_event_id = Column(String(100), nullable=True, index=True)  # The Odds API event ID
+    espn_game_id = Column(Integer, nullable=True, index=True)  # ESPN API game ID
+    nba_api_game_id = Column(String(20), nullable=True, index=True)  # NBA.com game ID
+
+    # Game information
     game_date = Column(DateTime, nullable=False, index=True)  # timestamp, not date
     away_team = Column(String(3), nullable=False)  # Team abbreviation (3 chars)
     home_team = Column(String(3), nullable=False)  # Team abbreviation (3 chars)
@@ -63,16 +118,30 @@ class Game(Base):
     __table_args__ = (
         Index('ix_games_external_id', 'external_id'),
         Index('ix_games_id_source', 'id_source'),
+        Index('ix_games_sport_id', 'sport_id'),
+        Index('ix_games_odds_api_event_id', 'odds_api_event_id'),
+        Index('ix_games_sport_date_status', 'sport_id', 'game_date', 'status'),
     )
 
 
 class Prediction(Base):
-    """AI-generated player prop predictions with odds pricing from bookmakers."""
+    """
+    AI-generated player prop predictions with odds pricing from bookmakers.
+
+    Updated for Phase 1: Multi-sport support with sport_id field.
+    """
     __tablename__ = "predictions"
 
     id = Column(String(36), primary_key=True)
+
+    # Multi-sport support
+    sport_id = Column(String(3), ForeignKey("sports.id"), nullable=False, index=True, default='nba')  # 'nba', 'nfl', 'mlb', 'nhl'
+
+    # Foreign keys
     player_id = Column(String(36), ForeignKey("players.id", ondelete="CASCADE"), nullable=False, index=True)
     game_id = Column(String(36), ForeignKey("games.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    # Prediction details
     stat_type = Column(String(50), nullable=False)  # points, rebounds, assists, threes, etc.
     predicted_value = Column(Float, nullable=False)
     bookmaker_line = Column(Float, nullable=True)
@@ -80,6 +149,7 @@ class Prediction(Base):
     recommendation = Column(String(10), nullable=False)  # OVER, UNDER
     confidence = Column(Float, nullable=False)  # 0.0 to 1.0
     model_version = Column(String(50), nullable=True)
+
     # Odds pricing fields
     over_price = Column(Float, nullable=True)  # American odds for OVER bet (e.g., -110, +150)
     under_price = Column(Float, nullable=True)  # American odds for UNDER bet
@@ -98,9 +168,11 @@ class Prediction(Base):
     game = relationship("Game", back_populates="predictions")
 
     __table_args__ = (
+        Index('ix_predictions_sport_id', 'sport_id'),
         Index('ix_predictions_odds_last_updated', 'odds_last_updated'),
         Index('ix_predictions_actuals_resolved', 'actuals_resolved_at'),
         Index('ix_predictions_accuracy_lookup', 'game_id', 'stat_type', 'actuals_resolved_at'),
+        Index('ix_predictions_confidence', 'confidence'),
     )
 
 

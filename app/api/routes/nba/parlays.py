@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from app.models.nba.models import Parlay
+from app.models import Parlay
 from app.core.database import get_db
 from app.services.core.parlay_service import ParlayService
 

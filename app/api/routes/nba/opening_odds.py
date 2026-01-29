@@ -27,7 +27,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import and_
 
 from app.core.database import get_db
-from app.models.nba.models import Game, HistoricalOddsSnapshot, Player
+from app.models import Game, HistoricalOddsSnapshot, Player
 from app.services.nba.opening_odds_service import OpeningOddsService
 
 logger = logging.getLogger(__name__)
@@ -206,7 +206,7 @@ async def list_games_with_opening_odds(
     Returns:
         List of games with opening odds count
     """
-    from app.models.nba.models import HistoricalOddsSnapshot
+    from app.models import HistoricalOddsSnapshot
 
     cutoff_time = datetime.now(UTC) + timedelta(hours=hours_ahead)
 
@@ -276,7 +276,7 @@ async def capture_opening_odds(
             continue
 
         # Verify player exists
-        from app.models.nba.models import Player
+        from app.models import Player
         player = db.query(Player).filter(Player.id == odd.player_id).first()
         if not player:
             skipped.append({"odd": odd.model_dump(), "reason": "Player not found"})

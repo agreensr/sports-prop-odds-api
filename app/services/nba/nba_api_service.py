@@ -22,7 +22,7 @@ from typing import List, Dict, Optional
 from sqlalchemy.orm import Session
 import uuid
 
-from app.models.nba.models import Player, PlayerSeasonStats
+from app.models import Player, PlayerSeasonStats
 
 logger = logging.getLogger(__name__)
 

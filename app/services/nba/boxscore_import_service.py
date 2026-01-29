@@ -20,7 +20,7 @@ try:
 except ImportError:
     UTC = timezone.utc
 
-from app.models.nba.models import Game, Prediction, Player, PlayerStats
+from app.models import Game, Prediction, Player, PlayerStats
 from app.services.nba.nba_service import NBAService
 
 logger = logging.getLogger(__name__)
@@ -82,7 +82,7 @@ class BoxscoreImportService:
         Returns:
             True if game has valid mapping, False otherwise
         """
-        from app.models.nba.models import GameMapping
+        from app.models import GameMapping
 
         mapping = self.db.query(GameMapping).filter(
             GameMapping.nba_game_id == game.external_id
@@ -117,7 +117,7 @@ class BoxscoreImportService:
             boxscore_player_id: Player ID from boxscore source
             match_method: How the player was matched
         """
-        from app.models.nba.models import MatchAuditLog
+        from app.models import MatchAuditLog
         import json
 
         try:
