@@ -9,9 +9,10 @@ import logging
 import uuid
 from typing import Dict, List
 from sqlalchemy.orm import Session
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 from app.core.config import settings
-from app.models.nba.models import Player, PlayerSeasonStats
+from app.models import Player, PlayerSeasonStats
 from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
@@ -26,6 +27,53 @@ class NbaDataService:
 
     def __init__(self, db: Session):
         self.db = db
+
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=2, max=10),
+        retry=retry_if_exception_type(Exception)
+    )
+    async def _fetch_nba_stats_with_retry(
+        self,
+        season: str,
+        per_mode: str,
+        measure_type: str
+    ) -> List[Dict]:
+        """
+        Internal method to fetch NBA player stats with retry logic.
+
+        Args:
+            season: Season string (e.g., "2024-25")
+            per_mode: "PerGame" or "Per36"
+            measure_type: "Base", "Advanced", etc.
+
+        Returns:
+            List of player stat dictionaries
+
+        Raises:
+            Exception: If all retries are exhausted
+        """
+        await asyncio.sleep(NBA_API_REQUEST_DELAY)
+
+        from nba_api.stats.endpoints import leaguedashplayerstats
+
+        stats = leaguedashplayerstats.LeagueDashPlayerStats(
+            season=season,
+            season_type_all_star='Regular Season',
+            measure_type_detailed_defense=measure_type,
+            per_mode_detailed=per_mode,
+            plus_minus='N',
+            pace_adjust='N',
+            rank='N'
+        )
+
+        df = stats.get_data_frames()[0] if stats.get_data_frames() else None
+
+        if df is None or df.empty:
+            logger.warning(f"No player stats returned for {season}")
+            return []
+
+        return df.to_dict('records')
 
     async def fetch_all_player_stats(
         self,
@@ -48,30 +96,13 @@ class NbaDataService:
             List of player stat dictionaries
         """
         try:
-            from nba_api.stats.endpoints import leaguedashplayerstats
-
-            await asyncio.sleep(NBA_API_REQUEST_DELAY)
-
-            stats = leaguedashplayerstats.LeagueDashPlayerStats(
+            return await self._fetch_nba_stats_with_retry(
                 season=season,
-                season_type_all_star='Regular Season',
-                measure_type_detailed_defense=measure_type,
-                per_mode_detailed=per_mode,
-                plus_minus='N',
-                pace_adjust='N',
-                rank='N'
+                per_mode=per_mode,
+                measure_type=measure_type
             )
-
-            df = stats.get_data_frames()[0] if stats.get_data_frames() else None
-
-            if df is None or df.empty:
-                logger.warning(f"No player stats returned for {season}")
-                return []
-
-            return df.to_dict('records')
-
         except Exception as e:
-            logger.error(f"Error fetching player stats: {e}")
+            logger.error(f"Error fetching player stats after retries: {e}")
             return []
 
     async def fetch_player_per_36(self, season: str = CURRENT_SEASON) -> List[Dict]:

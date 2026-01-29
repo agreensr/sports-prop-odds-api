@@ -17,9 +17,10 @@ from datetime import datetime, date, timedelta
 from typing import List, Dict, Any, Optional
 from sqlalchemy.orm import Session
 import uuid
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 from app.services.nba.nba_api_service import NbaApiService
-from app.models.nba.models import Player, Game as NBAGame, TeamMapping
+from app.models import Player, Game as NBAGame, TeamMapping
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +42,30 @@ class NbaApiAdapter:
         """
         self.db = db
         self.nba_service = NbaApiService(db=db)
+
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=2, max=10),
+        retry=retry_if_exception_type((httpx.HTTPStatusError, httpx.RequestError, httpx.TimeoutException))
+    )
+    async def _fetch_nba_scoreboard_with_retry(
+        self,
+        client: httpx.AsyncClient,
+        url: str
+    ) -> Dict:
+        """
+        Internal method to fetch NBA scoreboard with retry logic.
+
+        Args:
+            client: HTTP client
+            url: Scoreboard URL
+
+        Returns:
+            Parsed JSON response
+        """
+        response = await client.get(url)
+        response.raise_for_status()
+        return response.json()
 
     async def fetch_games(
         self,
@@ -67,9 +92,7 @@ class NbaApiAdapter:
 
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.get(base_url)
-                response.raise_for_status()
-                data = response.json()
+                data = await self._fetch_nba_scoreboard_with_retry(client, base_url)
 
             # Extract games from scoreboard
             scoreboard = data.get("scoreboard", {})
@@ -299,7 +322,7 @@ class NbaApiAdapter:
         Returns:
             Team mapping dict or None
         """
-        from app.models.nba.models import TeamMapping
+        from app.models import TeamMapping
 
         mapping = self.db.query(TeamMapping).filter(
             TeamMapping.nba_abbreviation == abbreviation

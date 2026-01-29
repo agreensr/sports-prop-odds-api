@@ -26,8 +26,9 @@ from sqlalchemy import and_, or_, func
 import logging
 import uuid
 from pydantic import BaseModel
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
-from app.models.nba.models import PlayerInjury, Player, Game
+from app.models import PlayerInjury, Player, Game
 
 logger = logging.getLogger(__name__)
 
@@ -122,6 +123,25 @@ class InjuryService:
         async with self._lock:
             self._cache[key] = CacheEntry(data, valid_until)
 
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=2, max=10),
+        retry=retry_if_exception_type((httpx.HTTPStatusError, httpx.RequestError, httpx.TimeoutException))
+    )
+    async def _fetch_espn_news_with_retry(self, client: httpx.AsyncClient) -> Dict:
+        """
+        Internal method to fetch ESPN news with retry logic.
+
+        Args:
+            client: HTTP client
+
+        Returns:
+            Parsed JSON response
+        """
+        response = await client.get(ESPN_NEWS_API_URL)
+        response.raise_for_status()
+        return response.json()
+
     async def fetch_espn_injury_news(self, limit: int = 50) -> List[Dict]:
         """
         Fetch injury-related news from ESPN NBA News API.
@@ -145,9 +165,7 @@ class InjuryService:
 
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.get(ESPN_NEWS_API_URL)
-                response.raise_for_status()
-                data = response.json()
+                data = await self._fetch_espn_news_with_retry(client)
 
             # Extract articles
             articles = data.get("articles", [])
@@ -182,6 +200,35 @@ class InjuryService:
             logger.error(f"Error fetching ESPN injury news: {e}")
             return []
 
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=2, max=10),
+        retry=retry_if_exception_type((httpx.HTTPStatusError, httpx.RequestError, httpx.TimeoutException))
+    )
+    async def _fetch_firecrawl_with_retry(
+        self,
+        client: httpx.AsyncClient,
+        url: str
+    ) -> Dict:
+        """
+        Internal method to fetch data from Firecrawl with retry logic.
+
+        Args:
+            client: HTTP client
+            url: URL to scrape
+
+        Returns:
+            Parsed JSON response
+        """
+        payload = {"url": url}
+        response = await client.post(
+            f"{FIRECRAWL_BASE_URL}/v1/scrape",
+            json=payload,
+            headers={"Content-Type": "application/json"}
+        )
+        response.raise_for_status()
+        return response.json()
+
     async def fetch_nba_official_report(self) -> List[Dict]:
         """
         Fetch official NBA injury report via Firecrawl.
@@ -201,18 +248,12 @@ class InjuryService:
             return cached
 
         try:
-            # Call Firecrawl API
+            # Call Firecrawl API with retry logic
             async with httpx.AsyncClient(timeout=60.0) as client:
-                payload = {
-                    "url": NBA_INJURY_REPORT_URL
-                }
-                response = await client.post(
-                    f"{FIRECRAWL_BASE_URL}/v1/scrape",
-                    json=payload,
-                    headers={"Content-Type": "application/json"}
+                data = await self._fetch_firecrawl_with_retry(
+                    client,
+                    NBA_INJURY_REPORT_URL
                 )
-                response.raise_for_status()
-                data = response.json()
 
             # Parse the scraped content
             content = data.get("data", {}).get("markdown", "")
