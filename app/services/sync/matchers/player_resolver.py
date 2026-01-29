@@ -11,6 +11,13 @@ Pipeline:
 2. Normalized comparison (remove suffixes, lowercase, etc.)
 3. Fuzzy match (Levenshtein, Jaro-Winkler)
 4. Team context match (same team + similar name)
+
+Improvements (P1 #11):
+- Increased context threshold from 80 to 85 to reduce false positives
+- Reduced team boost from +0.10 to +0.05 for more conservative matching
+- Added suffix preservation to prevent Jr/Sr confusion
+- Added verification_required flag for low-confidence matches
+- Added position verification when available
 """
 import logging
 from typing import Dict, Any, Optional
@@ -18,14 +25,22 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 
 from app.services.sync.utils.name_normalizer import (
-    normalize, extract_player_name_parts, are_names_equal
+    normalize, extract_player_name_parts, are_names_equal, extract_suffix
 )
 from app.services.sync.utils.confidence_scorer import calculate_player_match_confidence
-from app.models.nba.models import PlayerAlias, MatchAuditLog
+from app.models import PlayerAlias, MatchAuditLog
 import uuid
 import json
 
 logger = logging.getLogger(__name__)
+
+# Matching thresholds - adjusted to reduce false positives
+CONTEXT_MATCH_THRESHOLD = 85  # Increased from 80 (was allowing 70% similarity with boost)
+FUZZY_MATCH_THRESHOLD = 85     # Minimum WRatio score for fuzzy match
+TEAM_MATCH_BOOST = 0.05        # Reduced from 0.10 (was overcompensating)
+POSITION_MATCH_BOOST = 0.03    # Boost when position also matches
+AUTO_ACCEPT_THRESHOLD = 0.85   # Auto-accept matches at or above this
+MANUAL_REVIEW_THRESHOLD = 0.70 # Require review below this
 
 
 class PlayerResolver:
@@ -210,7 +225,7 @@ class PlayerResolver:
             player_name,
             alias_choices,
             scorer=fuzz.WRatio,
-            score_cutoff=85  # Minimum 85% similarity
+            score_cutoff=FUZZY_MATCH_THRESHOLD  # Minimum 85% similarity
         )
 
         if best_match:
@@ -220,15 +235,21 @@ class PlayerResolver:
             # Calculate confidence based on score
             confidence = score / 100.0
 
-            # Boost if context supports it
+            # Apply conservative boosts
             if context.get('team_match'):
-                confidence = min(confidence + 0.05, 1.0)
+                confidence = min(confidence + TEAM_MATCH_BOOST, 1.0)
+            if context.get('position_match'):
+                confidence = min(confidence + POSITION_MATCH_BOOST, 1.0)
+
+            # Determine if verification is required
+            verification_required = confidence < AUTO_ACCEPT_THRESHOLD
 
             return {
                 'nba_player_id': alias_obj.nba_player_id,
                 'canonical_name': alias_obj.canonical_name,
                 'match_confidence': confidence,
-                'match_method': 'fuzzy'
+                'match_method': 'fuzzy',
+                'verification_required': verification_required
             }
 
         return None
@@ -245,6 +266,13 @@ class PlayerResolver:
         If we know the team, filter candidates to that team first,
         then do fuzzy matching. This significantly improves accuracy.
 
+        Improvements (P1 #11):
+        - Increased threshold from 80 to 85 to reduce false positives
+        - Reduced boost from +0.10 to +0.05 for more conservative matching
+        - Added suffix mismatch detection (Jr vs Sr) to prevent false positives
+        - Added position verification when available
+        - Added verification_required flag for low-confidence matches
+
         Args:
             player_name: Player name to look up
             source: Source of the name
@@ -260,7 +288,7 @@ class PlayerResolver:
 
         if not team_id and context.get('team_abbr'):
             # Look up team ID from abbreviation
-            from app.models.nba.models import TeamMapping
+            from app.models import TeamMapping
             team_mapping = self.db.query(TeamMapping).filter(
                 TeamMapping.nba_abbreviation == context['team_abbr']
             ).first()
@@ -270,8 +298,11 @@ class PlayerResolver:
         if not team_id:
             return None
 
+        # Extract suffix from input name for comparison
+        input_suffix = extract_suffix(player_name)
+
         # Get player aliases, filtered by team if possible
-        from app.models.nba.models import Player
+        from app.models import Player
         players = self.db.query(Player).filter(
             Player.nba_api_id.isnot(None),
             Player.team == context.get('team_abbr', '')
@@ -280,31 +311,80 @@ class PlayerResolver:
         if not players:
             return None
 
+        # Filter out players with conflicting suffixes (Jr vs Sr)
+        if input_suffix:
+            players = self._filter_by_suffix_compatibility(players, input_suffix)
+
+        if not players:
+            return None
+
         # Create choices from player names
         player_choices = [(p.name, p) for p in players]
 
-        # Find best match
+        # Find best match with increased threshold
         best_match = process.extractOne(
             player_name,
             player_choices,
             scorer=fuzz.WRatio,
-            score_cutoff=80  # Lower threshold for context match
+            score_cutoff=CONTEXT_MATCH_THRESHOLD  # Increased from 80
         )
 
         if best_match:
             player_name_matched, player_obj = best_match[0]
             score = best_match[1]
 
-            confidence = min(score / 100.0 + 0.10, 1.0)  # Boost for team match
+            # Calculate confidence with reduced boost
+            confidence = score / 100.0 + TEAM_MATCH_BOOST  # Reduced from +0.10
+
+            # Additional position verification when available
+            if context.get('position') and player_obj.position:
+                if context['position'] == player_obj.position:
+                    confidence = min(confidence + POSITION_MATCH_BOOST, 1.0)
+                else:
+                    # Penalty for position mismatch
+                    confidence -= 0.05
+
+            # Determine if verification is required
+            verification_required = confidence < AUTO_ACCEPT_THRESHOLD
 
             return {
                 'nba_player_id': player_obj.nba_api_id,
                 'canonical_name': player_obj.name,
-                'match_confidence': confidence,
-                'match_method': 'context'
+                'match_confidence': min(confidence, 1.0),
+                'match_method': 'context',
+                'verification_required': verification_required
             }
 
         return None
+
+    def _filter_by_suffix_compatibility(self, players: list, input_suffix: str) -> list:
+        """
+        Filter out players with incompatible suffixes.
+
+        Prevents matching "Tim Hardaway Jr." with "Tim Hardaway Sr."
+        by removing players with conflicting suffixes from consideration.
+
+        Args:
+            players: List of Player objects
+            input_suffix: Suffix extracted from input name (e.g., "jr", "sr")
+
+        Returns:
+            Filtered list of players
+        """
+        if not input_suffix or input_suffix.lower() not in ['jr', 'sr']:
+            # No filtering needed for non-generational suffixes
+            return players
+
+        incompatible_suffix = 'sr' if input_suffix.lower() == 'jr' else 'jr'
+
+        filtered = []
+        for player in players:
+            player_suffix = extract_suffix(player.name or '')
+            # Keep player if suffix doesn't conflict
+            if player_suffix.lower() != incompatible_suffix:
+                filtered.append(player)
+
+        return filtered
 
     async def create_or_update_alias(
         self,

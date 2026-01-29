@@ -89,6 +89,41 @@ def _remove_suffixes(name: str) -> str:
     return name
 
 
+def extract_suffix(name: str) -> str:
+    """
+    Extract the suffix from a name if present.
+
+    Unlike _remove_suffixes, this returns the suffix rather than
+    removing it. Used for suffix compatibility checking to prevent
+    matching Jr/Sr players.
+
+    Args:
+        name: The name to extract suffix from
+
+    Returns:
+        The suffix (lowercase, without dots) or empty string if no suffix
+
+    Examples:
+        >>> extract_suffix("Tim Hardaway Jr.")
+        'jr'
+        >>> extract_suffix("Tim Hardaway Sr.")
+        'sr'
+        >>> extract_suffix("Ken Griffey Jr.")
+        'jr'
+        >>> extract_suffix("Kelly Oubre")
+        ''
+    """
+    if not name:
+        return ""
+
+    parts = name.split()
+
+    if parts and parts[-1].lower().replace('.', '') in SUFFIXES:
+        return parts[-1].lower().replace('.', '')
+
+    return ""
+
+
 def _normalize_unicode(name: str) -> str:
     """
     Remove accents and diacritics from unicode characters.
