@@ -24,6 +24,21 @@ from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
 
+# =============================================================================
+# MODEL VERSION CONFIGURATION (P2 #21: Prediction Versioning)
+# =============================================================================
+
+# Default model version for all sports
+# Override in sport-specific services by setting MODEL_VERSION class attribute
+DEFAULT_MODEL_VERSION = "1.0.0"
+
+# Model version history for tracking changes over time
+# Format: version -> (description, release_date)
+MODEL_VERSION_HISTORY = {
+    "1.0.0": ("Initial prediction model", "2025-01-15"),
+}
+
+
 # Optional: Import sport config for configuration-driven mode
 try:
     from app.services.core.sport_adapter import (
@@ -47,6 +62,9 @@ class BasePredictionService(ABC):
     Implements the common prediction generation workflow while allowing
     sports to customize behavior through abstract methods and hooks.
     """
+
+    # Sport-specific services can override this to track their model version
+    MODEL_VERSION: str = DEFAULT_MODEL_VERSION
 
     def __init__(self, db: Session, sport_id: Optional[str] = None):
         """
@@ -179,6 +197,49 @@ class BasePredictionService(ABC):
         raise NotImplementedError(
             "get_prediction_model() must be implemented, or pass sport_id to use unified models"
         )
+
+    def get_model_version(self) -> str:
+        """
+        Get the current model version for this prediction service.
+
+        The model version is stored with each prediction to track which
+        model generated it. This allows for:
+        - Tracking model performance over time
+        - Regenerating predictions when models improve
+        - A/B testing different model versions
+
+        Returns:
+            Model version string (e.g., "1.0.0")
+
+        Examples:
+            # Override in sport-specific service
+            class NBAPredictionService(BasePredictionService):
+                MODEL_VERSION = "1.1.0"  # Improved NBA model
+        """
+        # Allow sport-specific override via class attribute
+        if hasattr(self, 'MODEL_VERSION') and self.MODEL_VERSION != DEFAULT_MODEL_VERSION:
+            return self.MODEL_VERSION
+
+        # In config mode, check if sport config has model version
+        if self.use_config_mode and hasattr(self, '_sport_config'):
+            return getattr(self._sport_config, 'model_version', DEFAULT_MODEL_VERSION)
+
+        return DEFAULT_MODEL_VERSION
+
+    def get_model_version_info(self) -> Dict[str, str]:
+        """
+        Get information about the current model version.
+
+        Returns:
+            Dict with version, description, and release_date
+        """
+        version = self.get_model_version()
+        info = MODEL_VERSION_HISTORY.get(version, ("Unknown model version", "Unknown"))
+        return {
+            "version": version,
+            "description": info[0],
+            "release_date": info[1]
+        }
 
     def get_season_stats_model(self) -> Type:
         """
@@ -743,7 +804,7 @@ class BasePredictionService(ABC):
             bookmaker_name=None,
             recommendation=recommendation,
             confidence=confidence,
-            model_version="v1.0",
+            model_version=self.get_model_version(),
             over_price=None,
             under_price=None,
             odds_last_updated=None,
