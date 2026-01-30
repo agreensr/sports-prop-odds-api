@@ -17,6 +17,7 @@ eliminating the need to implement abstract methods for configuration.
 """
 import logging
 import random
+import uuid
 from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import List, Dict, Optional, Any, Type
@@ -516,9 +517,11 @@ class BasePredictionService(ABC):
         SeasonStats = self.get_season_stats_model()
 
         # Build query filters for season stats
+        # Convert game.season (Integer) to string for comparison with PlayerSeasonStats.season (String)
+        season_str = str(game.season) if game.season else None
         filters = [
             SeasonStats.player_id == player.id,
-            SeasonStats.season == game.season
+            SeasonStats.season == season_str
         ]
 
         # Add any sport-specific filters
@@ -662,9 +665,11 @@ class BasePredictionService(ABC):
         confidence = 0.50
 
         # Build season stats query
+        # Convert game.season (Integer) to string for comparison with PlayerSeasonStats.season (String)
+        season_str = str(game.season) if game.season else None
         filters = [
             SeasonStats.player_id == player.id,
-            SeasonStats.season == game.season
+            SeasonStats.season == season_str
         ]
         additional_filters = self._get_season_stats_query_filters()
         if additional_filters:
@@ -796,6 +801,7 @@ class BasePredictionService(ABC):
         Prediction = self.get_prediction_model()
 
         return Prediction(
+            id=str(uuid.uuid4()),
             player_id=player_id,
             game_id=game_id,
             stat_type=stat_type,

@@ -178,8 +178,14 @@ class GameMatcher:
                     nba_game_id=nba_game_id,
                     nba_home_team_id=nba_home_team_id,
                     nba_away_team_id=nba_away_team_id,
+                    odds_event_id=match.get('odds_event_id'),
+                    odds_sport_key=match.get('odds_sport_key', 'basketball_nba'),
                     game_date=game_date_value,
                     game_time=game_time_value,
+                    match_confidence=match.get('match_confidence', 0.0),
+                    match_method=match.get('match_method', 'none'),
+                    status=match.get('status', 'pending'),
+                    last_validated_at=None,
                     created_at=now,
                     updated_at=now
                 )
