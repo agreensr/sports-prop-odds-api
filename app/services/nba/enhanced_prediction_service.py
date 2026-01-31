@@ -152,13 +152,20 @@ REST_DAYS_PENALTY = {
 # STAT-SPECIFIC CALIBRATION FACTORS
 # Based on historical accuracy analysis (207 resolved predictions)
 # Model systematically over-predicts, so we apply downward correction
-# Updated v2.4 - Balanced calibration (UNDER was winning 53-74%, now too aggressive)
+# Updated v2.5 - Dynamic calibration based on player tier/star power
+# Star players (25+ pts/36) get 1.0 (no correction), role players get less
 STAT_CALIBRATION = {
-    'points': 0.85,      # UNDER was 73.5% - reduced from 0.62
-    'rebounds': 0.75,    # UNDER was 67.6% - reduced from 0.48
-    'assists': 0.85,     # UNDER was 62.6% - reduced from 0.65
-    'threes': 0.70,      # UNDER was 53.6% - reduced from 0.45
+    'points': 0.90,      # Default/fallback (tier system overrides this)
+    'rebounds': 0.75,    # Default/fallback
+    'assists': 0.85,     # Default/fallback
+    'threes': 0.70,      # Default/fallback
 }
+
+# Tier thresholds for dynamic calibration
+TIER_STAR = 25          # pts/36 - no correction needed
+TIER_ABOVE_AVG = 18    # pts/36 - minimal correction
+TIER_AVG = 12          # pts/36 - moderate correction
+# Below 12 = role player - more correction
 
 
 class EnhancedPredictionService:
@@ -479,15 +486,34 @@ class EnhancedPredictionService:
         variance = random.uniform(-0.01, 0.01)
         projection *= (1 + variance)
 
-        # Apply stat-specific calibration to correct over-prediction bias
-        # Based on 828 resolved predictions analysis:
-        # - Points: 12.90 predicted vs 10.08 actual (22% over) → 0.78x
-        # - Rebounds: 5.50 predicted vs 3.83 actual (30% over) → 0.70x
-        # - Assists: 3.09 predicted vs 2.49 actual (19% over) → 0.81x
-        # - Threes: 1.56 predicted vs 1.10 actual (42% over) → 0.71x
-        calibration_factor = STAT_CALIBRATION.get(stat_type, 1.0)
+        # DYNAMIC CALIBRATION based on player quality/star power
+        # Star players (high usage) need less correction than role players
+        # Get base projection (pre-calibration) to determine tier
+        base_projection = projection / (1 + variance) if variance > 0 else projection
+        recent_form = self._get_recent_form(player, stat_type)
+
+        if recent_form and recent_form.get("ewma_per_36"):
+            pts_per_36 = recent_form["ewma_per_36"]
+
+            # Tier-based calibration for points
+            if stat_type == "points":
+                if pts_per_36 >= 25:  # Star players (Embiid, Durant, etc.)
+                    calibration_factor = 1.0  # No correction - their actual production is accurate
+                elif pts_per_36 >= 18:  # Above average scorers
+                    calibration_factor = 0.95
+                elif pts_per_36 >= 12:  # Average scorers
+                    calibration_factor = 0.90
+                else:  # Role players
+                    calibration_factor = 0.85
+            # Similar tiering for other stats could be added
+            else:
+                calibration_factor = STAT_CALIBRATION.get(stat_type, 1.0)
+        else:
+            calibration_factor = STAT_CALIBRATION.get(stat_type, 1.0)
+
         projection *= calibration_factor
         factors["calibration"] = calibration_factor
+        factors["dynamic_tier"] = recent_form.get("ewma_per_36") if recent_form else None
 
         return {
             "projected": round(float(max(0, projection)), 1),
