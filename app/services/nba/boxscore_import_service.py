@@ -388,11 +388,17 @@ class BoxscoreImportService:
                 difference = abs(prediction.predicted_value - actual_value)
 
                 # Determine if recommendation was correct
+                # Use bookmaker_line if available (correct measure of bet outcome)
+                # Fall back to predicted_value for legacy predictions without lines
+                line = prediction.bookmaker_line if prediction.bookmaker_line is not None else prediction.predicted_value
+
                 was_correct = None
                 if prediction.recommendation == "OVER":
-                    was_correct = actual_value > prediction.predicted_value
+                    # OVER wins if actual exceeds the line
+                    was_correct = actual_value > line
                 elif prediction.recommendation == "UNDER":
-                    was_correct = actual_value < prediction.predicted_value
+                    # UNDER wins if actual is below the line
+                    was_correct = actual_value < line
                 # For "NONE" recommendations, was_correct stays None
 
                 # Update prediction with accuracy data
@@ -405,7 +411,7 @@ class BoxscoreImportService:
 
                 logger.debug(
                     f"Resolved: {player.name} {prediction.stat_type} "
-                    f"(predicted: {prediction.predicted_value}, actual: {actual_value}, "
+                    f"(predicted: {prediction.predicted_value}, line: {line}, actual: {actual_value}, "
                     f"difference: {difference:.2f}, correct: {was_correct})"
                 )
 
