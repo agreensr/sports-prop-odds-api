@@ -118,7 +118,8 @@ class HistoricalStatsImporter:
             return stats
 
         # Filter for completed games only
-        completed_games = [g for g in games_data if g.get('status') in ['final', 'finished', 'post']]
+        # ESPN uses 'post' for completed games
+        completed_games = [g for g in games_data if g.get('status') in ['post', 'final', 'finished']]
 
         print(f"  Found {len(completed_games)} completed games (out of {len(games_data)} total)")
 
