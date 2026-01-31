@@ -108,7 +108,7 @@ class HistoricalStatsImporter:
         }
 
         # Get games for this date from ESPN
-        games_data = await self.espn_service.get_scoreboard(
+        games_data = await self.espn_service.get_scores(
             sport_id='nba',
             date=date_str
         )
