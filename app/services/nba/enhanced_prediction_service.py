@@ -1110,7 +1110,7 @@ class EnhancedPredictionService:
         else:
             adj = 0.0
 
-        return adj
+        return float(adj)
 
     def _calculate_teammate_injury_boost(
         self,
