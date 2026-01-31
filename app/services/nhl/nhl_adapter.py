@@ -94,32 +94,138 @@ class NhlApiAdapter:
         """
         Normalize ESPN game data to standard format.
 
+        Handles two possible input structures:
+        1. Parsed game dict from ESPNApiService.get_scores with 'competitors' as dict {'home': ..., 'away': ...}
+        2. Raw ESPN event from direct API call with 'competitions' array
+
         Args:
-            game: Raw ESPN game data
+            game: Game data from ESPN service
 
         Returns:
             Normalized game dict or None
         """
         try:
-            competitors = game.get('competitors', {})
-            home = competitors.get('home', {})
-            away = competitors.get('away', {})
+            from datetime import datetime
+
+            if not game:
+                return None
+
+            # Handle parsed format from ESPNApiService.get_scores
+            competitors = game.get('competitors')
+            if competitors and isinstance(competitors, dict):
+                # Parsed format: {'home': {...}, 'away': ...}
+                home = competitors.get('home') or {}
+                away = competitors.get('away') or {}
+
+                home_team = home.get('abbreviation')
+                away_team = away.get('abbreviation')
+                home_score = int(home.get('score') or 0)
+                away_score = int(away.get('score') or 0)
+                status = game.get('status', 'scheduled')
+                game_date = game.get('date')
+                game_id = game.get('id')
+                season_year = game_date.year if hasattr(game_date, 'year') else datetime.now().year
+
+                if not home_team or not away_team:
+                    logger.warning(f"Missing team abbreviations in game {game_id}: home={home_team}, away={away_team}")
+                    return None
+
+                return {
+                    'id': game_id,
+                    'sport_id': self.sport_id,
+                    'game_date': game_date,
+                    'away_team': away_team,
+                    'home_team': home_team,
+                    'away_score': away_score,
+                    'home_score': home_score,
+                    'status': status,
+                    'season': season_year,
+                    'source': 'espn',
+                    'raw_data': game,
+                }
+
+            # Handle raw ESPN event format (from direct API call)
+            competitions = game.get('competitions', [])
+            if not competitions:
+                return None
+
+            comp = competitions[0]
+            competitors = comp.get('competitors', [])
+            if not competitors or len(competitors) < 2:
+                return None
+
+            # Parse home and away teams
+            home_team = None
+            away_team = None
+            home_score = 0
+            away_score = 0
+
+            for comp_team in competitors:
+                team_data = comp_team.get('team', {})
+                abbreviation = team_data.get('abbreviation', '')
+                score = comp_team.get('score', 0) or 0
+
+                if comp_team.get('homeAway') == 'home':
+                    home_team = abbreviation
+                    home_score = int(score)
+                else:
+                    away_team = abbreviation
+                    away_score = int(score)
+
+            if not home_team or not away_team:
+                return None
+
+            # Parse status - handle missing data gracefully
+            status_data = comp.get('status')
+            if not status_data:
+                status_data = {}
+
+            # Try multiple possible status structures
+            status_type = status_data.get('type') if isinstance(status_data, dict) else None
+            if not status_type:
+                # Try direct state/id from status
+                status_state = status_data.get('state', 'pre') if isinstance(status_data, dict) else 'pre'
+                status_id = status_data.get('id', '1') if isinstance(status_data, dict) else '1'
+            else:
+                status_state = status_type.get('state', 'pre')
+                status_id = status_type.get('id', '1')
+
+            # Map ESPN status to our status
+            status_map = {
+                '1': 'scheduled',
+                '2': 'in_progress',
+                '3': 'final'
+            }
+            status = status_map.get(str(status_id), status_state if status_state in ['scheduled', 'in_progress', 'final'] else 'scheduled')
+
+            # Parse date
+            date_str = game.get('date')
+            game_date = None
+            if date_str:
+                try:
+                    game_date = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+                except:
+                    pass
+
+            # Get season year
+            season_data = game.get('season', {})
+            season_year = season_data.get('year', datetime.now().year)
 
             return {
                 'id': game.get('id'),
                 'sport_id': self.sport_id,
-                'game_date': game.get('date'),
-                'away_team': away.get('abbreviation', ''),
-                'home_team': home.get('abbreviation', ''),
-                'away_score': away.get('score'),
-                'home_score': home.get('score'),
-                'status': game.get('status', 'scheduled'),
-                'season': self._get_season_from_date(game.get('date')),
+                'game_date': game_date,
+                'away_team': away_team,
+                'home_team': home_team,
+                'away_score': away_score,
+                'home_score': home_score,
+                'status': status,
+                'season': season_year,
                 'source': 'espn',
                 'raw_data': game,
             }
         except Exception as e:
-            logger.error(f"Error normalizing NHL game: {e}")
+            logger.error(f"Error normalizing NHL game: {e}, game keys: {list(game.keys()) if game else 'None'}")
             return None
 
     def _get_season_from_date(self, game_date: Optional[datetime]) -> int:
@@ -149,36 +255,71 @@ class NhlApiAdapter:
         Fetch NHL teams from ESPN API.
 
         Returns:
-            List of normalized team dicts
+            List of normalized team dicts with structure:
+            {
+                'id': team ESPN ID,
+                'abbreviation': 'ANA',
+                'name': 'Anaheim Ducks',
+                'short_name': 'Ducks',
+                'location': 'Anaheim',
+                'logo': logo_url,
+                'color': hex_color,
+                'venue': venue_info
+            }
         """
         from app.services.core.espn_service import ESPNApiService
+        import httpx
 
         espn_service = ESPNApiService()
 
         try:
-            teams = await espn_service.get_teams('nhl')
+            # Direct API call for better control
+            async with httpx.AsyncClient() as client:
+                response = await client.get(
+                    "https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/teams",
+                    timeout=30.0
+                )
+                response.raise_for_status()
+                data = response.json()
+
+            # Parse teams from ESPN structure: sports[0].leagues[0].teams
+            teams = []
+            sports = data.get('sports', [])
+            if sports:
+                leagues = sports[0].get('leagues', [])
+                if leagues:
+                    for team_item in leagues[0].get('teams', []):
+                        team_data = team_item.get('team', {})
+                        teams.append(team_data)
 
             normalized = []
             for team in teams:
+                # Get venue info if available
+                venue = None
+                if 'venue' in team:
+                    venue_data = team['venue']
+                    venue = {
+                        'id': venue_data.get('id'),
+                        'full_name': venue_data.get('fullName'),
+                        'city': venue_data.get('address', {}).get('city'),
+                    }
+
                 normalized.append({
                     'id': team.get('id'),
-                    'sport_id': self.sport_id,
-                    'name': team.get('name'),
-                    'display_name': team.get('display_name'),
                     'abbreviation': team.get('abbreviation'),
-                    'logo': team.get('logo'),
+                    'name': team.get('displayName'),  # Full name "Anaheim Ducks"
+                    'short_name': team.get('shortDisplayName'),  # "Ducks"
+                    'location': team.get('location'),  # "Anaheim"
+                    'logo': team.get('logos', [{}])[0].get('href') if team.get('logos') else None,
                     'color': team.get('color'),
-                    'venue': team.get('venue'),
-                    'source': 'espn',
+                    'venue': venue,
                 })
 
-            await espn_service.close()
             logger.info(f"Fetched {len(normalized)} NHL teams")
             return normalized
 
         except Exception as e:
             logger.error(f"Error fetching NHL teams: {e}")
-            await espn_service.close()
             return []
 
     async def fetch_roster(
