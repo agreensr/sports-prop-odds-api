@@ -145,7 +145,7 @@ def regenerate_predictions(include_estimated_lines: bool = True):
                     bookmaker_name=pred.get("bookmaker", "fanduel"),
                     recommendation=pred["recommendation"],
                     confidence=pred["confidence"],
-                    model_version="2.1.0-calibrated",
+                    model_version="2.2.0-calibrated",
                     created_at=datetime.now()
                 )
                 db.add(new_pred)
