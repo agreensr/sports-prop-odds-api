@@ -19,7 +19,7 @@ from app.core.database import get_db
 from app.core.config import settings
 from app.services.nba.prediction_service import PredictionService
 from app.services.core.odds_api_service import get_odds_service
-from app.utils.timezone import format_game_time_central, utc_to_central
+from app.utils.timezone import format_game_time_eastern, utc_to_eastern
 
 logger = logging.getLogger(__name__)
 
@@ -45,9 +45,9 @@ def check_request_limit(limiter: Limiter, request: Request, limit: str) -> tuple
 
 
 def prediction_to_dict(pred: Prediction) -> dict:
-    """Convert Prediction model to dictionary with odds pricing and Central time."""
-    # Convert game UTC time to Central Time for display
-    central_time = utc_to_central(pred.game.game_date)
+    """Convert Prediction model to dictionary with odds pricing and Eastern time."""
+    # Convert game UTC time to Eastern Time for display
+    eastern_time = utc_to_eastern(pred.game.game_date)
 
     return {
         "id": str(pred.id),
@@ -62,8 +62,8 @@ def prediction_to_dict(pred: Prediction) -> dict:
             "id": str(pred.game.id),
             "external_id": pred.game.external_id,
             "date_utc": pred.game.game_date.isoformat(),
-            "date_central": central_time.isoformat(),
-            "date_display": format_game_time_central(pred.game.game_date),
+            "date_est": eastern_time.isoformat(),
+            "date_display": format_game_time_eastern(pred.game.game_date),
             "away_team": pred.game.away_team,
             "home_team": pred.game.home_team,
             "status": pred.game.status
@@ -433,29 +433,30 @@ async def get_top_predictions(
 
     # Use Central Time for date filtering (games in CST)
     from datetime import datetime, timezone, timedelta
-    from app.utils.timezone import CENTRAL_TIME_OFFSET, UTC
+    from app.utils.timezone import EASTERN_STANDARD_OFFSET, UTC
 
-    # Get current time in Central Time
+    # Get current time in Eastern Time
     now_utc = datetime.now(UTC)
-    now_central = now_utc + CENTRAL_TIME_OFFSET
+    # EST is UTC-5
+    now_eastern = now_utc + timedelta(hours=-5)
     # Convert to naive datetime for easier manipulation
-    now_central_naive = now_central.replace(tzinfo=None)
+    now_eastern_naive = now_eastern.replace(tzinfo=None)
 
-    # Start of today in Central Time
-    start_of_today_central = now_central_naive.replace(hour=0, minute=0, second=0, microsecond=0)
+    # Start of today in Eastern Time
+    start_of_today_eastern = now_eastern_naive.replace(hour=0, minute=0, second=0, microsecond=0)
 
-    # For today only (days_ahead=0), use end of today in Central Time
+    # For today only (days_ahead=0), use end of today in Eastern Time
     # For days_ahead >= 1, include that many full days
     if days_ahead == 0:
-        end_date_central = now_central_naive.replace(hour=23, minute=59, second=59, microsecond=999999)
+        end_date_eastern = now_eastern_naive.replace(hour=23, minute=59, second=59, microsecond=999999)
     else:
-        # Add days to today in Central Time
-        end_date_central = (start_of_today_central + timedelta(days=days_ahead)).replace(hour=23, minute=59, second=59, microsecond=999999)
+        # Add days to today in Eastern Time
+        end_date_eastern = (start_of_today_eastern + timedelta(days=days_ahead)).replace(hour=23, minute=59, second=59, microsecond=999999)
 
-    # Convert Central Time boundaries to UTC for database comparison
-    # CST is UTC-6, so to convert CST to UTC: add 6 hours
-    start_date_utc = start_of_today_central - CENTRAL_TIME_OFFSET  # This adds 6 hours (becomes UTC)
-    end_date_utc = end_date_central - CENTRAL_TIME_OFFSET
+    # Convert Eastern Time boundaries to UTC for database comparison
+    # EST is UTC-5, so to convert EST to UTC: add 5 hours
+    start_date_utc = start_of_today_eastern + timedelta(hours=5)
+    end_date_utc = end_date_eastern + timedelta(hours=5)
 
     # Make timezone-aware for comparison
     start_date_utc = start_date_utc.replace(tzinfo=timezone.utc)
@@ -481,7 +482,7 @@ async def get_top_predictions(
         "filters": {
             "min_confidence": min_confidence,
             "stat_type": stat_type,
-            "date_range": f"{start_of_today_central.strftime('%Y-%m-%d')} to {end_date_central.strftime('%Y-%m-%d')}",
+            "date_range": f"{start_of_today_eastern.strftime('%Y-%m-%d')} to {end_date_eastern.strftime('%Y-%m-%d')}",
             "timezone": "Central Time (CST)"
         },
         "predictions": [prediction_to_dict(p) for p in predictions],
@@ -701,15 +702,15 @@ async def get_enhanced_predictions_for_game(
     )
 
     # Get game info for response
-    central_time = utc_to_central(game.game_date)
+    eastern_time = utc_to_eastern(game.game_date)
 
     return {
         "game": {
             "id": str(game.id),
             "external_id": game.external_id,
             "date_utc": game.game_date.isoformat(),
-            "date_central": central_time.isoformat(),
-            "date_display": format_game_time_central(game.game_date),
+            "date_est": eastern_time.isoformat(),
+            "date_display": format_game_time_eastern(game.game_date),
             "away_team": game.away_team,
             "home_team": game.home_team,
             "status": game.status

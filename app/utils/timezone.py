@@ -1,13 +1,17 @@
 """
 Timezone utilities for the sports betting API.
 
-All times are displayed in Central Time (CST/CDT).
-Game times are stored in UTC and converted to Central for display.
+All times are stored in UTC and converted to Eastern Time for display.
+NBA games are typically scheduled in ET.
 
-Central Time Zones:
+Eastern Time Zones:
+- EST (Eastern Standard Time): UTC-5, November - March
+- EDT (Eastern Daylight Time): UTC-4, March - November
+- DST transitions: Second Sunday in March → First Sunday in November
+
+Central Time Zones (legacy reference):
 - CST (Central Standard Time): UTC-6, November - March
 - CDT (Central Daylight Time): UTC-5, March - November
-- DST transitions: Second Sunday in March → First Sunday in November
 """
 from datetime import datetime, timezone, timedelta
 from typing import Tuple, Optional
@@ -180,6 +184,52 @@ def et_to_utc(et_datetime: datetime) -> datetime:
     return utc_datetime.replace(tzinfo=None)
 
 
+def utc_to_eastern(utc_datetime: Optional[datetime]) -> Optional[datetime]:
+    """
+    Convert UTC datetime to Eastern Time (EST/EDT).
+
+    Automatically handles daylight saving time:
+    - EDT (UTC-4): Second Sunday in March → First Sunday in November
+    - EST (UTC-5): First Sunday in November → Second Sunday in March
+
+    Args:
+        utc_datetime: UTC datetime (naive or timezone-aware)
+
+    Returns:
+        Eastern Time datetime as naive datetime (for JSON serialization)
+
+    Example:
+        Winter (EST):
+        >>> utc_to_eastern(datetime(2026, 2, 1, 0, 30))
+        datetime(2026, 1, 31, 19, 30)  # 5 hour difference
+
+        Summer (EDT):
+        >>> utc_to_eastern(datetime(2025, 7, 15, 23, 0))
+        datetime(2025, 7, 15, 19, 0)  # 4 hour difference
+    """
+    if utc_datetime is None:
+        return None
+
+    # Ensure input is timezone-aware UTC
+    if utc_datetime.tzinfo is None:
+        utc_datetime = utc_datetime.replace(tzinfo=timezone.utc)
+
+    # Determine if we're in daylight saving time
+    dst_start, dst_end = _get_dst_transitions_eastern(utc_datetime.year)
+    is_dst = dst_start <= utc_datetime <= dst_end
+
+    # Apply the appropriate offset
+    if is_dst:
+        # EDT (UTC-4)
+        eastern_datetime = utc_datetime + timedelta(hours=-4)
+    else:
+        # EST (UTC-5)
+        eastern_datetime = utc_datetime + timedelta(hours=-5)
+
+    # Return naive datetime (without tzinfo) for JSON serialization
+    return eastern_datetime.replace(tzinfo=None)
+
+
 def utc_to_central(utc_datetime: Optional[datetime]) -> Optional[datetime]:
     """
     Convert UTC datetime to Central Time (CST/CDT).
@@ -262,6 +312,64 @@ def _get_dst_transitions(year: int) -> Tuple[datetime, datetime]:
     return dst_start_utc, dst_end_utc
 
 
+def _get_dst_transitions_eastern(year: int) -> Tuple[datetime, datetime]:
+    """
+    Get DST transition dates for a given year (Eastern Time).
+
+    DST starts: Second Sunday in March at 2:00 AM local time
+    DST ends: First Sunday in November at 2:00 AM local time
+
+    Args:
+        year: Year to calculate transitions for
+
+    Returns:
+        Tuple of (dst_start, dst_end) as UTC datetimes
+    """
+    def find_nth_sunday(year: int, month: int, n: int) -> datetime:
+        """Find the nth Sunday of the given month."""
+        day = 1
+        sunday_count = 0
+        while True:
+            dt = datetime(year, month, day)
+            if dt.weekday() == 6:  # Sunday
+                sunday_count += 1
+                if sunday_count == n:
+                    return dt
+            day += 1
+
+    # Second Sunday in March at 2:00 AM EST = 7:00 AM UTC
+    dst_start_local = find_nth_sunday(year, 3, 2).replace(hour=2, minute=0, second=0, microsecond=0)
+    dst_start_utc = (dst_start_local + timedelta(hours=5)).replace(tzinfo=timezone.utc)
+
+    # First Sunday in November at 2:00 AM EDT = 6:00 AM UTC
+    dst_end_local = find_nth_sunday(year, 11, 1).replace(hour=2, minute=0, second=0, microsecond=0)
+    dst_end_utc = (dst_end_local + timedelta(hours=4)).replace(tzinfo=timezone.utc)
+
+    return dst_start_utc, dst_end_utc
+
+
+def format_game_time_eastern(utc_datetime: Optional[datetime]) -> str:
+    """
+    Format UTC datetime as Eastern Time string with timezone abbreviation.
+
+    Args:
+        utc_datetime: UTC datetime
+
+    Returns:
+        Formatted datetime string in Eastern Time with EST/EDT suffix
+
+    Example:
+        >>> format_game_time_eastern(datetime(2026, 2, 1, 0, 30))
+        '2026-01-31 19:30:00 EST'
+    """
+    if utc_datetime is None:
+        return "N/A"
+
+    eastern_dt = utc_to_eastern(utc_datetime)
+    tz_abbrev = _get_timezone_abbrev_eastern(eastern_dt)
+    return f"{eastern_dt.strftime('%Y-%m-%d %H:%M:%S')} {tz_abbrev}"
+
+
 def format_game_time_central(utc_datetime: Optional[datetime]) -> str:
     """
     Format UTC datetime as Central Time string with timezone abbreviation.
@@ -302,6 +410,34 @@ def format_central_time(utc_datetime: Optional[datetime], format_str: str = "%Y-
     tz_abbrev = _get_timezone_abbrev(central_dt)
     formatted = central_dt.strftime(format_str)
     return f"{formatted} {tz_abbrev}"
+
+
+def _get_timezone_abbrev_eastern(dt: datetime) -> str:
+    """
+    Get the timezone abbreviation for Eastern Time datetime.
+
+    Args:
+        dt: Datetime in Eastern Time (naive)
+
+    Returns:
+        "EST" or "EDT"
+    """
+    # DST is roughly March - November
+    if 3 <= dt.month <= 11:
+        if dt.month >= 4 or dt.month <= 10:
+            return "EDT"
+        elif dt.month == 3:
+            # March: after second Sunday
+            if dt.day >= 8:  # Approximation
+                return "EDT"
+            return "EST"
+        elif dt.month == 11:
+            # November: before first Sunday
+            if dt.day <= 7:  # Approximation
+                return "EDT"
+            return "EST"
+
+    return "EST"
 
 
 def _get_timezone_abbrev(dt: datetime) -> str:
