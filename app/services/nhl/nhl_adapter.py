@@ -57,35 +57,38 @@ class NhlApiAdapter:
         Returns:
             List of normalized game dicts
         """
-        from app.services.core.espn_service import ESPNApiService
+        import httpx
 
         if not season:
             season = datetime.now().year
 
         all_games = []
-        espn_service = ESPNApiService()
 
         # Fetch games for each day
         base_date = datetime.now()
         date_range = range(-lookback_days, lookahead_days + 1)
 
-        for offset in date_range:
-            game_date = base_date + timedelta(days=offset)
-            date_str = game_date.strftime('%Y%m%d')
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            for offset in date_range:
+                game_date = base_date + timedelta(days=offset)
+                date_str = game_date.strftime('%Y%m%d')
 
-            try:
-                # Use ESPN API for scores
-                games = await espn_service.get_scores('nhl', date_str)
+                try:
+                    # Direct ESPN API call for NHL scoreboard
+                    url = f"https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/scoreboard?dates={date_str}"
+                    response = await client.get(url)
+                    response.raise_for_status()
+                    data = response.json()
 
-                for game in games:
-                    normalized = self._normalize_game(game)
-                    if normalized:
-                        all_games.append(normalized)
+                    # Normalize each event
+                    for event in data.get('events', []):
+                        normalized = self._normalize_game(event)
+                        if normalized:
+                            all_games.append(normalized)
 
-            except Exception as e:
-                logger.error(f"Error fetching NHL games for {date_str}: {e}")
+                except Exception as e:
+                    logger.error(f"Error fetching NHL games for {date_str}: {e}")
 
-        await espn_service.close()
         logger.info(f"Fetched {len(all_games)} NHL games")
 
         return all_games
@@ -94,12 +97,8 @@ class NhlApiAdapter:
         """
         Normalize ESPN game data to standard format.
 
-        Handles two possible input structures:
-        1. Parsed game dict from ESPNApiService.get_scores with 'competitors' as dict {'home': ..., 'away': ...}
-        2. Raw ESPN event from direct API call with 'competitions' array
-
         Args:
-            game: Game data from ESPN service
+            game: Raw ESPN event data with 'competitions' array
 
         Returns:
             Normalized game dict or None
@@ -109,40 +108,6 @@ class NhlApiAdapter:
 
             if not game:
                 return None
-
-            # Handle parsed format from ESPNApiService.get_scores
-            competitors = game.get('competitors')
-            if competitors and isinstance(competitors, dict):
-                # Parsed format: {'home': {...}, 'away': ...}
-                home = competitors.get('home') or {}
-                away = competitors.get('away') or {}
-
-                home_team = home.get('abbreviation')
-                away_team = away.get('abbreviation')
-                home_score = int(home.get('score') or 0)
-                away_score = int(away.get('score') or 0)
-                status = game.get('status', 'scheduled')
-                game_date = game.get('date')
-                game_id = game.get('id')
-                season_year = game_date.year if hasattr(game_date, 'year') else datetime.now().year
-
-                if not home_team or not away_team:
-                    logger.warning(f"Missing team abbreviations in game {game_id}: home={home_team}, away={away_team}")
-                    return None
-
-                return {
-                    'id': game_id,
-                    'sport_id': self.sport_id,
-                    'game_date': game_date,
-                    'away_team': away_team,
-                    'home_team': home_team,
-                    'away_score': away_score,
-                    'home_score': home_score,
-                    'status': status,
-                    'season': season_year,
-                    'source': 'espn',
-                    'raw_data': game,
-                }
 
             # Handle raw ESPN event format (from direct API call)
             competitions = game.get('competitions', [])
