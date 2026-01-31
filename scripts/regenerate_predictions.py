@@ -67,7 +67,7 @@ def regenerate_predictions(include_estimated_lines: bool = True):
 
             predictions = service.generate_prop_predictions(
                 game_id=game.id,
-                stat_types=["points"],
+                stat_types=["points", "rebounds", "assists", "threes"],
                 bookmaker="fanduel"
             )
 
@@ -75,62 +75,64 @@ def regenerate_predictions(include_estimated_lines: bool = True):
             if include_estimated_lines and len(predictions) == 0:
                 # Get active players and generate predictions with estimated lines
                 players = service._get_active_players(game)
+                stat_types = ["points", "rebounds", "assists", "threes"]
 
                 for player in players:
-                    try:
-                        projection_data = service._calculate_base_projection(
-                            player, game, "points"
-                        )
-
-                        if not projection_data:
-                            continue
-
-                        line_data = service._get_bookmaker_line(
-                            player, game, "points", "fanduel"
-                        )
-
-                        # Calculate edge and recommendation
-                        projected = projection_data["projected"]
-                        line = line_data["line"]
-                        edge = projected - line
-
-                        if edge >= service.min_edge_for_bet:
-                            recommendation = "OVER"
-                        elif edge <= -service.min_edge_for_bet:
-                            recommendation = "UNDER"
-                        else:
-                            recommendation = "PASS"
-
-                        # Calculate confidence
-                        if recommendation != "PASS":
-                            confidence = service._calculate_confidence(
-                                abs(edge), projection_data, line_data
+                    for stat_type in stat_types:
+                        try:
+                            projection_data = service._calculate_base_projection(
+                                player, game, stat_type
                             )
-                        else:
-                            confidence = 0.0
 
-                        if recommendation == "PASS" or confidence < 0.50:
+                            if not projection_data:
+                                continue
+
+                            line_data = service._get_bookmaker_line(
+                                player, game, stat_type, "fanduel"
+                            )
+
+                            # Calculate edge and recommendation
+                            projected = projection_data["projected"]
+                            line = line_data["line"]
+                            edge = projected - line
+
+                            if edge >= service.min_edge_for_bet:
+                                recommendation = "OVER"
+                            elif edge <= -service.min_edge_for_bet:
+                                recommendation = "UNDER"
+                            else:
+                                recommendation = "PASS"
+
+                            # Calculate confidence
+                            if recommendation != "PASS":
+                                confidence = service._calculate_confidence(
+                                    abs(edge), projection_data, line_data
+                                )
+                            else:
+                                confidence = 0.0
+
+                            if recommendation == "PASS" or confidence < 0.50:
+                                continue
+
+                            # Create prediction dict
+                            pred = {
+                                "player": player.name,
+                                "player_id": player.id,
+                                "team": player.team,
+                                "stat_type": stat_type,
+                                "projected": projected,
+                                "line": line,
+                                "edge": edge,
+                                "recommendation": recommendation,
+                                "confidence": confidence,
+                                "bookmaker": line_data.get("bookmaker", "estimated"),
+                                "line_source": "estimated"
+                            }
+                            predictions.append(pred)
+
+                        except Exception as e:
+                            print(f"  Error generating for {player.name} ({stat_type}): {e}")
                             continue
-
-                        # Create prediction dict
-                        pred = {
-                            "player": player.name,
-                            "player_id": player.id,
-                            "team": player.team,
-                            "stat_type": "points",
-                            "projected": projected,
-                            "line": line,
-                            "edge": edge,
-                            "recommendation": recommendation,
-                            "confidence": confidence,
-                            "bookmaker": line_data.get("bookmaker", "estimated"),
-                            "line_source": "estimated"
-                        }
-                        predictions.append(pred)
-
-                    except Exception as e:
-                        print(f"  Error generating for {player.name}: {e}")
-                        continue
 
             # Store predictions
             for pred in predictions:
