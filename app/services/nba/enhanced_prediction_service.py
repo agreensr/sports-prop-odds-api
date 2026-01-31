@@ -152,12 +152,12 @@ REST_DAYS_PENALTY = {
 # STAT-SPECIFIC CALIBRATION FACTORS
 # Based on historical accuracy analysis (207 resolved predictions)
 # Model systematically over-predicts, so we apply downward correction
-# Updated v2.2 - More aggressive calibration to account for persistent over-prediction
+# Updated v2.3 - Even more aggressive calibration (UNDER still winning 53-74%)
 STAT_CALIBRATION = {
-    'points': 0.72,      # Was still 22% over at 0.78, increased correction
-    'rebounds': 0.60,    # Was still 30% over at 0.70, increased correction
-    'assists': 0.75,     # Was still 19% over at 0.81, increased correction
-    'threes': 0.55,      # Was still 42% over at 0.71,大幅 increased correction
+    'points': 0.62,      # UNDER 73.5% - was still 22% over at 0.72
+    'rebounds': 0.48,    # UNDER 67.6% - was still 30% over at 0.60
+    'assists': 0.65,     # UNDER 62.6% - was still 19% over at 0.75
+    'threes': 0.45,      # UNDER 53.6% - was still 42% over at 0.55
 }
 
 
