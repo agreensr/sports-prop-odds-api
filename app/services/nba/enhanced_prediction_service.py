@@ -152,13 +152,13 @@ REST_DAYS_PENALTY = {
 # STAT-SPECIFIC CALIBRATION FACTORS
 # Based on historical accuracy analysis (207 resolved predictions)
 # Model systematically over-predicts, so we apply downward correction
-# Updated v2.5 - Dynamic calibration based on player tier/star power
-# Star players (25+ pts/36) get 1.0 (no correction), role players get less
+# Updated v2.6 - Reduced UNDER bias (87% UNDER win rate in v2.5)
+# Increased all factors to project higher values and reduce conservative bias
 STAT_CALIBRATION = {
-    'points': 0.90,      # Default/fallback (tier system overrides this)
-    'rebounds': 0.75,    # Default/fallback
-    'assists': 0.85,     # Default/fallback
-    'threes': 0.70,      # Default/fallback
+    'points': 0.95,      # v2.5: 0.90 - increased to reduce UNDER bias
+    'rebounds': 0.80,    # v2.5: 0.75 - increased to reduce UNDER bias
+    'assists': 0.90,     # v2.5: 0.85 - increased to reduce UNDER bias
+    'threes': 0.75,      # v2.5: 0.70 - increased to reduce UNDER bias
 }
 
 # Tier thresholds for dynamic calibration
@@ -495,16 +495,16 @@ class EnhancedPredictionService:
         if recent_form and recent_form.get("ewma_per_36"):
             pts_per_36 = recent_form["ewma_per_36"]
 
-            # Tier-based calibration for points
+            # Tier-based calibration for points (v2.6)
             if stat_type == "points":
                 if pts_per_36 >= 25:  # Star players (Embiid, Durant, etc.)
                     calibration_factor = 1.0  # No correction - their actual production is accurate
                 elif pts_per_36 >= 18:  # Above average scorers
-                    calibration_factor = 0.95
+                    calibration_factor = 0.98  # v2.5: 0.95 - slight increase
                 elif pts_per_36 >= 12:  # Average scorers
-                    calibration_factor = 0.90
+                    calibration_factor = 0.95  # v2.5: 0.90 - moderate increase
                 else:  # Role players
-                    calibration_factor = 0.85
+                    calibration_factor = 0.92  # v2.5: 0.85 - larger increase for most variance
             # Similar tiering for other stats could be added
             else:
                 calibration_factor = STAT_CALIBRATION.get(stat_type, 1.0)
@@ -583,7 +583,8 @@ class EnhancedPredictionService:
             stat_val = getattr(game, stat_type, None)
             mins = getattr(game, "minutes", None)
 
-            if stat_val and mins:
+            # Explicit zero-check protection to prevent division-by-zero errors
+            if stat_val and mins and mins > 0:
                 per_36 = stat_val * (36.0 / mins)
                 per_36_values.append(per_36)
                 minutes_values.append(mins)
