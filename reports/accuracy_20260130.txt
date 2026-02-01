@@ -1,0 +1,58 @@
+================================================================================
+PREDICTION ACCURACY REPORT
+================================================================================
+
+OVERALL PERFORMANCE
+--------------------------------------------------------------------------------
+Total Predictions:     14
+Correct:               9 (64.3%)
+Incorrect:             5 (35.7%)
+Mean Absolute Error:   5.55 points
+Mean Signed Error:     +0.59 points (bias)
+Average Confidence:    79.0%
+Average Edge:          -57.86%
+Calibration Error:     25.5% (lower is better)
+
+ACCURACY BY CONFIDENCE BUCKET
+--------------------------------------------------------------------------------
+70%-79%: 4/4 (100.0%)
+
+ACCURACY BY STAT TYPE
+--------------------------------------------------------------------------------
+points             9/  14 ( 64.3%)  MAE: 5.55
+
+ACCURACY BY RECOMMENDATION TYPE
+--------------------------------------------------------------------------------
+OVER      5/   7 ( 71.4%)  MAE: 5.54
+UNDER     4/   7 ( 57.1%)  MAE: 5.56
+
+ACCURACY BY EDGE MAGNITUDE
+--------------------------------------------------------------------------------
+small (0-2%)            4/   7 ( 57.1%)
+huge (10%+)             5/   7 ( 71.4%)
+
+TOP PERFORMING PLAYERS (min 5 predictions)
+--------------------------------------------------------------------------------
+
+LOWEST PERFORMING PLAYERS (min 5 predictions)
+--------------------------------------------------------------------------------
+
+LARGEST OVERESTIMATES (predicted - actual)
+--------------------------------------------------------------------------------
+Tyrese Maxey              points  : Pred 26.8 vs Actual 40.0 (Diff: +13.2)
+Kyshawn George            points  : Pred 13.8 vs Actual 23.0 (Diff: +9.2)
+Bobby Portis              points  : Pred 12.5 vs Actual 19.0 (Diff: +6.5)
+Jaden McDaniels           points  : Pred 15.4 vs Actual 21.0 (Diff: +5.6)
+Peyton Watson             points  : Pred 14.8 vs Actual 19.0 (Diff: +4.2)
+
+LARGEST UNDERESTIMATES (predicted - actual)
+--------------------------------------------------------------------------------
+Jalen Williams            points  : Pred 14.7 vs Actual 0.0 (Diff: -14.7)
+VJ Edgecombe              points  : Pred 14.8 vs Actual 5.0 (Diff: -9.8)
+Anthony Edwards           points  : Pred 31.2 vs Actual 26.0 (Diff: -5.2)
+Coby White                points  : Pred 17.9 vs Actual 14.0 (Diff: -3.9)
+Zach LaVine               points  : Pred 18.0 vs Actual 17.0 (Diff: -1.0)
+
+================================================================================
+END OF REPORT
+================================================================================
