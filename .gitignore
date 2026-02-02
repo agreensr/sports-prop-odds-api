@@ -50,3 +50,9 @@ Thumbs.db
 # Temporary files
 tmp/
 *.tmp
+
+# Backup files
+*.old
+*.bak
+*.backup
+backups/
