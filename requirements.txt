@@ -53,12 +53,11 @@ prometheus-client>=0.19.0
 # Performance testing
 locust>=2.15.0
 
-# Distributed tracing
-opentelemetry-api>=1.22.0
-opentelemetry-sdk>=1.22.0
-opentelemetry-instrumentation-fastapi>=0.43b0
-opentelemetry-instrumentation-sqlalchemy>=0.43b0
-opentelemetry-instrumentation-httpx>=0.43b0
-opentelemetry-semantic-conventions>=1.22.0
-opentelemetry-exporter-otlp>=1.22.0
-opentelemetry-exporter-console>=1.22.0
+# Distributed tracing (optional - commented out due to version conflicts)
+# opentelemetry-api>=1.22.0
+# opentelemetry-sdk>=1.22.0
+# opentelemetry-instrumentation-fastapi>=0.43b0
+# opentelemetry-instrumentation-sqlalchemy>=0.43b0
+# opentelemetry-instrumentation-httpx>=0.43b0
+# opentelemetry-semantic-conventions>=0.60b0
+# opentelemetry-exporter-otlp>=1.22.0
