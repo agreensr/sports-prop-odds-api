@@ -13,7 +13,7 @@ import asyncio
 import logging
 import os
 import sys
-from datetime import datetime, timedelta, timezone, UTC
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 # Add project root to path
@@ -105,7 +105,7 @@ class DailyOddsFetchService:
             logger.info(f"Found {len(games_data)} games from The Odds API")
 
             # Filter games within 48 hours
-            cutoff = datetime.now(UTC) + timedelta(hours=FETCH_HOURS_AHEAD)
+            cutoff = datetime.now(timezone.utc) + timedelta(hours=FETCH_HOURS_AHEAD)
             games_to_process = []
 
             for game_data in games_data:
@@ -170,8 +170,8 @@ class DailyOddsFetchService:
 
         try:
             # Get games within 48 hours that don't have predictions
-            cutoff = datetime.now(UTC) + timedelta(hours=FETCH_HOURS_AHEAD)
-            start = datetime.now(UTC)
+            cutoff = datetime.now(timezone.utc) + timedelta(hours=FETCH_HOURS_AHEAD)
+            start = datetime.now(timezone.utc)
 
             games = self.db.query(Game).filter(
                 Game.game_date >= start,
@@ -215,7 +215,7 @@ class DailyOddsFetchService:
             mapper = OddsMapper(self.db)
 
             # Get games with predictions - only those within 2 hours of start
-            now = datetime.now(UTC)
+            now = datetime.now(timezone.utc)
             start_window = now - timedelta(hours=1)  # Started within last hour
             end_window = now + timedelta(hours=PLAYER_PROPS_HOURS_BEFORE)  # Starting within 2 hours
 
@@ -262,7 +262,7 @@ class DailyOddsFetchService:
                     props_data = await service.get_event_player_props(game.external_id)
 
                     # Map to prediction updates
-                    updates = mapper.map_player_props_to_predictions(props_data, game)
+                    updates = await mapper.map_player_props_to_predictions(props_data, game)
 
                     # Apply updates with bookmaker priority
                     for update_data in updates:

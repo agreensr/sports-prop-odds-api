@@ -8,12 +8,18 @@ Calculates prediction accuracy metrics including:
 - Model Drift Detection: Compares recent performance to baseline
 """
 import logging
-from datetime import datetime, timedelta, timezone, UTC
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_, case, literal_column, cast, Date, extract
 
-from app.models.nba.models import Prediction, Player, Game
+# UTC timezone for Python < 3.11 compatibility
+try:
+    from datetime import UTC
+except ImportError:
+    UTC = timezone.utc
+
+from app.models import Prediction, Player, Game
 
 logger = logging.getLogger(__name__)
 

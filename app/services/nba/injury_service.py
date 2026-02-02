@@ -22,12 +22,13 @@ import httpx
 from datetime import date, datetime, timedelta
 from typing import List, Dict, Optional
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, or_
+from sqlalchemy import and_, or_, func
 import logging
 import uuid
 from pydantic import BaseModel
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
-from app.models.nba.models import PlayerInjury, Player, Game
+from app.models import PlayerInjury, Player, Game
 
 logger = logging.getLogger(__name__)
 
@@ -122,6 +123,25 @@ class InjuryService:
         async with self._lock:
             self._cache[key] = CacheEntry(data, valid_until)
 
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=2, max=10),
+        retry=retry_if_exception_type((httpx.HTTPStatusError, httpx.RequestError, httpx.TimeoutException))
+    )
+    async def _fetch_espn_news_with_retry(self, client: httpx.AsyncClient) -> Dict:
+        """
+        Internal method to fetch ESPN news with retry logic.
+
+        Args:
+            client: HTTP client
+
+        Returns:
+            Parsed JSON response
+        """
+        response = await client.get(ESPN_NEWS_API_URL)
+        response.raise_for_status()
+        return response.json()
+
     async def fetch_espn_injury_news(self, limit: int = 50) -> List[Dict]:
         """
         Fetch injury-related news from ESPN NBA News API.
@@ -145,9 +165,7 @@ class InjuryService:
 
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.get(ESPN_NEWS_API_URL)
-                response.raise_for_status()
-                data = response.json()
+                data = await self._fetch_espn_news_with_retry(client)
 
             # Extract articles
             articles = data.get("articles", [])
@@ -182,6 +200,35 @@ class InjuryService:
             logger.error(f"Error fetching ESPN injury news: {e}")
             return []
 
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=2, max=10),
+        retry=retry_if_exception_type((httpx.HTTPStatusError, httpx.RequestError, httpx.TimeoutException))
+    )
+    async def _fetch_firecrawl_with_retry(
+        self,
+        client: httpx.AsyncClient,
+        url: str
+    ) -> Dict:
+        """
+        Internal method to fetch data from Firecrawl with retry logic.
+
+        Args:
+            client: HTTP client
+            url: URL to scrape
+
+        Returns:
+            Parsed JSON response
+        """
+        payload = {"url": url}
+        response = await client.post(
+            f"{FIRECRAWL_BASE_URL}/v1/scrape",
+            json=payload,
+            headers={"Content-Type": "application/json"}
+        )
+        response.raise_for_status()
+        return response.json()
+
     async def fetch_nba_official_report(self) -> List[Dict]:
         """
         Fetch official NBA injury report via Firecrawl.
@@ -201,18 +248,12 @@ class InjuryService:
             return cached
 
         try:
-            # Call Firecrawl API
+            # Call Firecrawl API with retry logic
             async with httpx.AsyncClient(timeout=60.0) as client:
-                payload = {
-                    "url": NBA_INJURY_REPORT_URL
-                }
-                response = await client.post(
-                    f"{FIRECRAWL_BASE_URL}/v1/scrape",
-                    json=payload,
-                    headers={"Content-Type": "application/json"}
+                data = await self._fetch_firecrawl_with_retry(
+                    client,
+                    NBA_INJURY_REPORT_URL
                 )
-                response.raise_for_status()
-                data = response.json()
 
             # Parse the scraped content
             content = data.get("data", {}).get("markdown", "")
@@ -560,3 +601,87 @@ class InjuryService:
             self.db.rollback()
 
         return False
+
+    def filter_by_injury_status(
+        self,
+        player_ids: List[str],
+        exclude_statuses: Optional[List[str]] = None
+    ) -> List[str]:
+        """
+        Filter out injured players from a list.
+
+        CRITICAL: This is the main injury filtering method for predictions.
+        Must be called BEFORE generating predictions to exclude unavailable players.
+
+        Args:
+            player_ids: List of player database UUIDs
+            exclude_statuses: Injury statuses to exclude (default: out, doubtful, questionable)
+
+        Returns:
+            Filtered list of player IDs (healthy players only)
+
+        Example:
+            >>> healthy_ids = injury_service.filter_by_injury_status(player_ids)
+            >>> print(f"Filtered: {len(player_ids)} → {len(healthy_ids)}")
+        """
+        if exclude_statuses is None:
+            exclude_statuses = ["out", "doubtful", "questionable"]
+
+        cutoff_date = date.today() - timedelta(days=7)
+
+        # Normalize statuses to uppercase for case-insensitive comparison
+        exclude_statuses_upper = [s.upper() for s in exclude_statuses]
+
+        # Get active injuries for these players
+        injured = self.db.query(PlayerInjury).filter(
+            and_(
+                PlayerInjury.player_id.in_(player_ids),
+                PlayerInjury.reported_date >= cutoff_date,
+                func.upper(PlayerInjury.status).in_(exclude_statuses_upper)
+            )
+        ).all()
+
+        injured_ids = {injury.player_id for injury in injured}
+
+        # Log filtered players with details
+        for injury in injured:
+            player = self.db.query(Player).filter(Player.id == injury.player_id).first()
+            if player:
+                logger.info(
+                    f"Excluding {player.name} - status: {injury.status}, "
+                    f"injury: {injury.injury_type}"
+                )
+            else:
+                logger.info(f"Excluding player {injury.player_id} - status: {injury.status}")
+
+        # Return only healthy players
+        healthy_ids = [pid for pid in player_ids if pid not in injured_ids]
+
+        logger.info(
+            f"Injury filter: {len(player_ids)} → {len(healthy_ids)} "
+            f"(excluded {len(injured_ids)}: {exclude_statuses})"
+        )
+
+        return healthy_ids
+
+    def filter_players_by_injury_status(
+        self,
+        players: List[Player],
+        exclude_statuses: Optional[List[str]] = None
+    ) -> List[Player]:
+        """
+        Filter Player objects by injury status.
+
+        Convenience method that works with Player objects instead of IDs.
+
+        Args:
+            players: List of Player objects
+            exclude_statuses: Injury statuses to exclude
+
+        Returns:
+            Filtered list of Player objects (healthy players only)
+        """
+        player_ids = [p.id for p in players]
+        healthy_ids = set(self.filter_by_injury_status(player_ids, exclude_statuses))
+
+        return [p for p in players if p.id in healthy_ids]

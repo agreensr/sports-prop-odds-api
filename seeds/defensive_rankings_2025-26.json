@@ -1,0 +1,182 @@
+{
+    "ATL": {
+        "points_rank": 25,
+        "rebounds_rank": 24,
+        "assists_rank": 23,
+        "threes_rank": 24
+    },
+    "BOS": {
+        "points_rank": 3,
+        "rebounds_rank": 5,
+        "assists_rank": 4,
+        "threes_rank": 2
+    },
+    "BKN": {
+        "points_rank": 18,
+        "rebounds_rank": 20,
+        "assists_rank": 18,
+        "threes_rank": 12
+    },
+    "CHA": {
+        "points_rank": 26,
+        "rebounds_rank": 26,
+        "assists_rank": 26,
+        "threes_rank": 28
+    },
+    "CHI": {
+        "points_rank": 20,
+        "rebounds_rank": 18,
+        "assists_rank": 19,
+        "threes_rank": 20
+    },
+    "CLE": {
+        "points_rank": 4,
+        "rebounds_rank": 6,
+        "assists_rank": 5,
+        "threes_rank": 8
+    },
+    "DAL": {
+        "points_rank": 11,
+        "rebounds_rank": 13,
+        "assists_rank": 6,
+        "threes_rank": 7
+    },
+    "DEN": {
+        "points_rank": 6,
+        "rebounds_rank": 7,
+        "assists_rank": 9,
+        "threes_rank": 11
+    },
+    "DET": {
+        "points_rank": 30,
+        "rebounds_rank": 30,
+        "assists_rank": 30,
+        "threes_rank": 30
+    },
+    "GSW": {
+        "points_rank": 16,
+        "rebounds_rank": 22,
+        "assists_rank": 11,
+        "threes_rank": 3
+    },
+    "HOU": {
+        "points_rank": 27,
+        "rebounds_rank": 28,
+        "assists_rank": 27,
+        "threes_rank": 27
+    },
+    "IND": {
+        "points_rank": 15,
+        "rebounds_rank": 14,
+        "assists_rank": 16,
+        "threes_rank": 17
+    },
+    "LAC": {
+        "points_rank": 13,
+        "rebounds_rank": 15,
+        "assists_rank": 13,
+        "threes_rank": 16
+    },
+    "LAL": {
+        "points_rank": 21,
+        "rebounds_rank": 17,
+        "assists_rank": 24,
+        "threes_rank": 13
+    },
+    "MEM": {
+        "points_rank": 3,
+        "rebounds_rank": 1,
+        "assists_rank": 2,
+        "threes_rank": 5
+    },
+    "MIA": {
+        "points_rank": 7,
+        "rebounds_rank": 10,
+        "assists_rank": 12,
+        "threes_rank": 10
+    },
+    "MIL": {
+        "points_rank": 5,
+        "rebounds_rank": 3,
+        "assists_rank": 8,
+        "threes_rank": 6
+    },
+    "MIN": {
+        "points_rank": 9,
+        "rebounds_rank": 4,
+        "assists_rank": 7,
+        "threes_rank": 9
+    },
+    "NOP": {
+        "points_rank": 24,
+        "rebounds_rank": 11,
+        "assists_rank": 20,
+        "threes_rank": 11
+    },
+    "NYK": {
+        "points_rank": 12,
+        "rebounds_rank": 8,
+        "assists_rank": 15,
+        "threes_rank": 22
+    },
+    "OKC": {
+        "points_rank": 2,
+        "rebounds_rank": 2,
+        "assists_rank": 3,
+        "threes_rank": 4
+    },
+    "ORL": {
+        "points_rank": 10,
+        "rebounds_rank": 9,
+        "assists_rank": 22,
+        "threes_rank": 25
+    },
+    "PHI": {
+        "points_rank": 8,
+        "rebounds_rank": 12,
+        "assists_rank": 10,
+        "threes_rank": 15
+    },
+    "PHX": {
+        "points_rank": 14,
+        "rebounds_rank": 16,
+        "assists_rank": 14,
+        "threes_rank": 14
+    },
+    "POR": {
+        "points_rank": 17,
+        "rebounds_rank": 19,
+        "assists_rank": 21,
+        "threes_rank": 19
+    },
+    "SAC": {
+        "points_rank": 23,
+        "rebounds_rank": 23,
+        "assists_rank": 25,
+        "threes_rank": 23
+    },
+    "SAS": {
+        "points_rank": 29,
+        "rebounds_rank": 29,
+        "assists_rank": 29,
+        "threes_rank": 29
+    },
+    "TOR": {
+        "points_rank": 22,
+        "rebounds_rank": 25,
+        "assists_rank": 20,
+        "threes_rank": 18
+    },
+    "UTA": {
+        "points_rank": 19,
+        "rebounds_rank": 21,
+        "assists_rank": 17,
+        "threes_rank": 21
+    },
+    "WAS": {
+        "points_rank": 28,
+        "rebounds_rank": 27,
+        "assists_rank": 28,
+        "threes_rank": 26
+    }
+}

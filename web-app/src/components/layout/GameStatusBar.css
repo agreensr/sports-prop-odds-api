@@ -1,0 +1,190 @@
+/* ============================================================================
+   GameStatusBar Styles
+   ============================================================================ */
+
+.game-status-bar {
+  background-color: var(--color-bg-secondary);
+  border-bottom: 1px solid var(--color-border-default);
+  overflow: hidden;
+}
+
+.game-status-bar.empty {
+  padding: var(--spacing-sm) 0;
+}
+
+.game-status-container {
+  display: flex;
+  align-items: center;
+  padding: var(--spacing-sm) 0;
+  overflow: hidden;
+}
+
+.no-games-message {
+  font-size: 0.875rem;
+  color: var(--color-text-tertiary);
+  text-align: center;
+  width: 100%;
+}
+
+.game-status-label {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: 0 var(--spacing-md);
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--color-brand-600);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.live-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: var(--color-status-live);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.game-ticker {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  padding: 0 var(--spacing-md);
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+}
+
+.game-ticker::-webkit-scrollbar {
+  height: 4px;
+}
+
+.game-ticker::-webkit-scrollbar-thumb {
+  background-color: var(--color-bg-tertiary);
+  border-radius: 2px;
+}
+
+.game-ticker-item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-xs) var(--spacing-md);
+  background-color: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-md);
+  text-decoration: none;
+  white-space: nowrap;
+  scroll-snap-align: start;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.game-ticker-item:hover {
+  background-color: var(--color-bg-hover);
+  border-color: var(--color-border-hover);
+  text-decoration: none;
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+
+.game-status-badge {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  font-size: 0.7rem;
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.game-status-badge.live {
+  background-color: rgb(220 38 38 / 0.2);
+  color: var(--color-status-live);
+  border: 1px solid rgb(220 38 38 / 0.3);
+}
+
+.game-status-badge.scheduled {
+  background-color: rgb(156 163 175 / 0.2);
+  color: var(--color-status-scheduled);
+  border: 1px solid rgb(156 163 175 / 0.3);
+}
+
+.game-status-badge.final {
+  background-color: rgb(209 213 225 / 0.2);
+  color: var(--color-status-final);
+  border: 1px solid rgb(209 213 225 / 0.3);
+}
+
+.live-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: currentColor;
+  animation: pulse 1s ease-in-out infinite;
+}
+
+.period-indicator {
+  font-weight: 700;
+}
+
+.game-teams {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.team-abbr {
+  color: var(--color-text-secondary);
+}
+
+.team-score {
+  color: var(--color-text-primary);
+  font-weight: 700;
+}
+
+.team-score.winning {
+  color: var(--color-brand-600);
+}
+
+.vs {
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  font-weight: 400;
+}
+
+.time-remaining {
+  padding: var(--spacing-xs) var(--spacing-sm);
+  font-size: 0.75rem;
+  color: var(--color-brand-600);
+  background-color: rgb(220 38 38 / 0.1);
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+}
+
+@media (max-width: 768px) {
+  .game-status-label {
+    display: none;
+  }
+
+  .game-ticker {
+    padding: 0 var(--spacing-sm);
+    gap: var(--spacing-sm);
+  }
+
+  .game-ticker-item {
+    padding: var(--spacing-xs) var(--spacing-sm);
+    font-size: 0.75rem;
+  }
+
+  .time-remaining {
+    display: none;
+  }
+}

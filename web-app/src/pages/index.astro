@@ -1,0 +1,28 @@
+---
+import Layout from '@/layouts/Layout.astro';
+import Header from '@/components/layout/Header.astro';
+import Footer from '@/components/layout/Footer.astro';
+import App from '../components/App';
+---
+
+<Layout title="NBA Sports Betting AI">
+  <div class="app">
+    <Header />
+    <div class="app-main">
+      <App client:load />
+    </div>
+    <Footer />
+  </div>
+</Layout>
+
+<style>
+  .app {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+  }
+
+  .app-main {
+    flex: 1;
+  }
+</style>

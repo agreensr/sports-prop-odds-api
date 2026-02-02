@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from app.models.nba.models import Parlay
+from app.models import Parlay
 from app.core.database import get_db
 from app.services.core.parlay_service import ParlayService
 
@@ -89,8 +89,9 @@ async def generate_same_game_parlays(
     Generate same-game parlays with correlation analysis.
 
     Creates parlays combining:
-    - Same-player correlated props (points+assists, points+threes)
-    - Teammate correlated props (assists+points, rebounds+points)
+    - 2-leg parlays: Different players (diversified risk)
+    - 2-leg parlays: Same player ONLY if both legs are UNDER (conservative)
+    - 3+ leg parlays: Can be same player or different players
 
     Correlation analysis boosts expected value calculations based on
     statistical relationships between stat types.
@@ -99,7 +100,7 @@ async def generate_same_game_parlays(
     """
     try:
         service = ParlayService(db)
-        parlays = service.generate_same_game_parlays(
+        parlays = service.generate_same_game_parlays_optimized(
             game_id=game_id,
             min_confidence=min_confidence,
             max_legs=max_legs,

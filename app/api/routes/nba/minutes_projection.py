@@ -17,7 +17,14 @@ New: Starter, back-to-back, high foul risk → 26.2 minutes
 """
 import logging
 from typing import List, Optional, Dict
-from datetime import datetime, UTC
+from datetime import datetime
+
+# UTC timezone for Python < 3.11 compatibility
+try:
+    from datetime import UTC
+except ImportError:
+    from datetime import timezone
+    UTC = timezone.utc
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
@@ -25,7 +32,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import and_
 
 from app.core.database import get_db
-from app.models.nba.models import Game, Player, ExpectedLineup
+from app.models import Game, Player, ExpectedLineup
 from app.services.nba.minutes_projection_service import MinutesProjectionService
 
 logger = logging.getLogger(__name__)

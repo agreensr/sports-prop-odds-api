@@ -12,19 +12,41 @@ Key formula: predicted_value = per_36_stat × (projected_minutes / 36)
 Research-backed approach:
 - Returning players maintain efficiency, only minutes restricted
 - Source: https://www.jssm.org/volume24/iss2/cap/jssm-24-363.pdf
+
+---
+CONFIG MODE (New - Optional):
+Instead of implementing abstract methods, you can pass sport_id:
+
+    class PredictionService(BasePredictionService):
+        def __init__(self, db: Session):
+            super().__init__(db, sport_id="nba")  # Enables config mode
+            # Now position averages, stat types, thresholds come from config
+            # Only need to implement sport-specific business logic
+
+This eliminates the need for:
+- get_position_averages() (loaded from config)
+- get_default_stat_types() (loaded from config)
+- get_active_field_name() (loaded from config)
+- is_stat_relevant_for_position() (loaded from config)
+- get_position_stat_match() (loaded from config)
+- _get_recommendation() threshold (loaded from config)
+- _apply_variance() percent (loaded from config)
 """
 import logging
+import random
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional
 from sqlalchemy.orm import Session
-import random
 
-from app.models.nba.models import Player, Game, Prediction, PlayerStats, PlayerSeasonStats
+from app.models import Player, Game, Prediction, PlayerStats, PlayerSeasonStats
+from app.services.core.base_prediction_service import BasePredictionService
 
 logger = logging.getLogger(__name__)
 
 
 # Position-based stat averages (fallback when no historical data)
+# NOTE: These are now defined in app/services/core/sport_adapter/config.py
+# When using config mode (pass sport_id="nba" to parent), this can be removed
 POSITION_AVERAGES = {
     "PG": {"points": 14.5, "rebounds": 3.2, "assists": 6.8, "threes": 1.8},
     "SG": {"points": 15.2, "rebounds": 3.8, "assists": 3.1, "threes": 1.9},
@@ -38,219 +60,169 @@ POSITION_AVERAGES = {
 }
 
 
-class PredictionService:
+class PredictionService(BasePredictionService):
     """Service for generating NBA player prop predictions."""
 
     def __init__(self, db: Session):
-        self.db = db
+        super().__init__(db)
         # Lazy load services to avoid circular imports
         self._injury_service = None
         self._lineup_service = None
         self._nba_api_service = None
+        self._sync_orchestrator = None
+        self._weighted_stats_service = None
+        self._volatility_service = None
+        self._opponent_adjustment_service = None
 
-    @property
-    def injury_service(self):
-        """Lazy load injury service."""
-        if self._injury_service is None:
-            from app.services.nba.injury_service import InjuryService
-            self._injury_service = InjuryService(self.db)
-        return self._injury_service
+    # ========================================================================
+    # ABSTRACT METHOD IMPLEMENTATIONS
+    # ========================================================================
+    # NOTE: When using config mode, pass sport_id="nba" to parent __init__.
+    # These methods can then be removed as they'll be loaded from config.
 
-    @property
-    def lineup_service(self):
-        """Lazy load lineup service."""
-        if self._lineup_service is None:
-            from app.services.nba.lineup_service import LineupService
-            self._lineup_service = LineupService(self.db)
-        return self._lineup_service
+    def get_position_averages(self) -> Dict[str, Dict[str, float]]:
+        return POSITION_AVERAGES
 
-    @property
-    def nba_api_service(self):
-        """Lazy load nba_api service."""
-        if self._nba_api_service is None:
-            from app.services.nba.nba_api_service import NbaApiService
-            self._nba_api_service = NbaApiService(self.db)
-        return self._nba_api_service
+    def get_default_stat_types(self) -> List[str]:
+        return ["points", "rebounds", "assists", "threes"]
 
-    def generate_predictions_for_game(
+    def get_player_model(self):
+        return Player
+
+    def get_game_model(self):
+        return Game
+
+    def get_prediction_model(self):
+        return Prediction
+
+    def get_season_stats_model(self):
+        return PlayerSeasonStats
+
+    def get_active_field_name(self) -> str:
+        return "active"  # NBA uses boolean 'active' field
+
+    def is_stat_relevant_for_position(self, position: Optional[str], stat_type: str) -> bool:
+        # All positions can have all these stats in NBA
+        return True
+
+    def get_position_stat_match(self) -> Dict[str, str]:
+        return {
+            "PG": "assists",
+            "SG": "points",
+            "SF": "points",
+            "PF": "rebounds",
+            "C": "rebounds"
+        }
+
+    # ========================================================================
+    # NBA-SPECIFIC OVERRIDES
+    # ========================================================================
+
+    def _get_season_stats_query_filters(self) -> List:
+        """
+        NBA uses cached season stats with a 48-hour TTL.
+        """
+        return [
+            PlayerSeasonStats.fetched_at >= datetime.now() - timedelta(hours=48)
+        ]
+
+    def _extract_value_from_season_stats(
         self,
-        game_id: str,
-        stat_types: Optional[List[str]] = None
-    ) -> List[Dict]:
+        season_stats: PlayerSeasonStats,
+        stat_type: str,
+        player: Player,
+        game: Game
+    ) -> Optional[float]:
         """
-        Generate predictions for all players in a game.
-
-        Args:
-            game_id: Database UUID of the game
-            stat_types: List of stat types to predict (default: points, rebounds, assists, threes)
-
-        Returns:
-            List of generated prediction dictionaries
+        NBA stores per-36 stats directly in the season stats.
+        Try to apply EWMA adjustment for recent form.
         """
-        if stat_types is None:
-            stat_types = ["points", "rebounds", "assists", "threes"]
+        # NBA stores per-36 stats directly
+        per_36_value = getattr(season_stats, f'{stat_type}_per_36', None)
 
-        game = self.db.query(Game).filter(Game.id == game_id).first()
-        if not game:
-            logger.error(f"Game {game_id} not found")
-            return []
+        if per_36_value is not None:
+            logger.info(f"Using cached stats for {player.name}: {stat_type}_per_36 = {per_36_value}")
 
-        # Get all players for both teams
-        players = (
-            self.db.query(Player)
-            .filter(
-                Player.team.in_([game.away_team, game.home_team]),
-                Player.active == True
-            )
-            .all()
-        )
-
-        if not players:
-            logger.warning(f"No active players found for game {game.external_id}")
-            return []
-
-        predictions_generated = []
-
-        for player in players:
-            # Get injury and lineup context for this player
-            injury_context = self.injury_service.get_player_injury_context(player.id, game.id)
-            minutes_projection = self.lineup_service.get_player_minutes_projection(player.id, game.id)
-
-            # Ensure injury_context is always a dict (defensive check)
-            if injury_context is None:
-                injury_context = {}
-
-            for stat_type in stat_types:
-                # Check if prediction already exists
-                existing = (
-                    self.db.query(Prediction)
-                    .filter(
-                        Prediction.player_id == player.id,
-                        Prediction.game_id == game.id,
-                        Prediction.stat_type == stat_type
-                    )
-                    .first()
-                )
-
-                if existing:
-                    logger.debug(f"Prediction already exists for {player.name} - {stat_type}")
-                    continue
-
-                # Get predicted value with injury and lineup context
-                predicted_value = self._get_predicted_value(
-                    player, stat_type, game.id, injury_context, minutes_projection
-                )
-
-                # Skip predictions for players who are OUT
-                if (injury_context.get('self_injury') or {}).get('status') == 'out':
-                    logger.info(f"Skipping prediction for {player.name} - status: OUT")
-                    continue
-
-                # Calculate confidence based on various factors
-                confidence = self._calculate_confidence(player, stat_type, predicted_value, injury_context, game.id)
-
-                # Determine recommendation
-                recommendation = self._get_recommendation(confidence)
-
-                # Create prediction
-                prediction = Prediction(
-                    id=str(uuid_uuid()),  # Will be replaced by database default
+            # Try EWMA adjustment for recent form
+            try:
+                ewma_multiplier = self.weighted_stats_service.get_ewma_multiplier(
                     player_id=player.id,
-                    game_id=game.id,
                     stat_type=stat_type,
-                    predicted_value=predicted_value,
-                    bookmaker_line=None,  # Will be filled when odds are fetched
-                    bookmaker_name=None,
-                    recommendation=recommendation,
-                    confidence=confidence,
-                    model_version="1.0.0",  # Simple heuristic model
-                    over_price=None,
-                    under_price=None,
-                    odds_fetched_at=None,
-                    odds_last_updated=None,
-                    created_at=datetime.utcnow()
+                    games_back=10
                 )
+                if ewma_multiplier != 1.0:
+                    original = per_36_value
+                    per_36_value = per_36_value * ewma_multiplier
+                    logger.info(
+                        f"EWMA adjustment for {player.name} {stat_type}: "
+                        f"{original:.2f} → {per_36_value:.2f} ({ewma_multiplier:.2f}x)"
+                    )
+            except Exception as e:
+                logger.debug(f"EWMA calculation failed for {player.name} {stat_type}: {e}")
 
-                self.db.add(prediction)
-                predictions_generated.append({
-                    "player": player.name,
-                    "team": player.team,
-                    "stat_type": stat_type,
-                    "predicted_value": predicted_value,
-                    "confidence": confidence,
-                    "recommendation": recommendation
-                })
+            return per_36_value
 
-                logger.info(f"Generated prediction: {player.name} ({player.team}) - {stat_type}: {predicted_value:.1f} (confidence: {confidence:.2f})")
-
-        try:
-            self.db.commit()
-            logger.info(f"Generated {len(predictions_generated)} predictions for game {game.external_id}")
-        except Exception as e:
-            self.db.rollback()
-            logger.error(f"Error saving predictions: {e}")
-            raise
-
-        return predictions_generated
+        return None
 
     def _get_predicted_value(
         self,
         player: Player,
         stat_type: str,
-        game_id: Optional[str] = None,
-        injury_context: Optional[Dict] = None,
-        minutes_projection: Optional[int] = None
+        game: Game
     ) -> float:
         """
-        Calculate predicted value using player-specific historical stats from nba_api.
-
-        FALLBACK CHAIN (improves accuracy by using actual player data):
-        1. nba_api season stats (last 15 games averaged to per-36)
-        2. Database cache (player_season_stats table, 24-hour TTL)
-        3. PlayerStats (most recent game from boxscore)
-        4. POSITION_AVERAGES (last resort)
+        NBA-specific prediction calculation using per-36 stats and minutes projections.
 
         Formula: predicted_value = per_36_stat × (projected_minutes / 36)
-
-        Args:
-            player: Player model instance
-            stat_type: Stat to predict (points, rebounds, assists, threes)
-            game_id: Game ID for context lookup
-            injury_context: Injury context from InjuryService
-            minutes_projection: Projected minutes from LineupService
-
-        Returns:
-            Predicted value for the stat
         """
-        # Default injury context if not provided
-        if injury_context is None:
-            injury_context = self.injury_service.get_player_injury_context(player.id, game_id)
+        # First try cached season stats (which has per-36)
+        SeasonStats = self.get_season_stats_model()
+        cached_stats = (
+            self.db.query(SeasonStats)
+            .filter(
+                SeasonStats.player_id == player.id,
+                SeasonStats.season == "2025-26"
+            )
+            .first()
+        )
 
-        # Ensure injury_context is always a dict (defensive check in case get_player_injury_context returns None)
-        if injury_context is None:
-            injury_context = {}
-
-        # STEP 1: Try database cache (primary data source - refreshed every 6 hours)
         per_36_value = None
 
-        # Check database cache for recent player stats
-        cached_stats = self.db.query(PlayerSeasonStats).filter(
-            PlayerSeasonStats.player_id == player.id,
-            PlayerSeasonStats.season == "2025-26",
-            PlayerSeasonStats.fetched_at >= datetime.now() - timedelta(hours=48)  # 48-hour cache window
-        ).first()
-
         if cached_stats:
-            per_36_value = getattr(cached_stats, f'{stat_type}_per_36')
-            logger.info(f"Using cached stats for {player.name}: {stat_type}_per_36 = {per_36_value}")
-        else:
-            logger.debug(f"No cached stats available for {player.name}, will use fallback")
+            per_36_value = getattr(cached_stats, f'{stat_type}_per_36', None)
 
-        # STEP 2: Fallback to PlayerStats (most recent game)
+        # Try EWMA for recent form adjustment
+        if per_36_value is not None:
+            try:
+                ewma_result = self.weighted_stats_service.calculate_ewma(
+                    player_id=player.id,
+                    stat_type=stat_type,
+                    games_back=10
+                )
+                if ewma_result["sample_size"] >= 3:
+                    ewma_multiplier = self.weighted_stats_service.get_ewma_multiplier(
+                        player_id=player.id,
+                        stat_type=stat_type,
+                        games_back=10
+                    )
+                    if ewma_multiplier != 1.0:
+                        original = per_36_value
+                        per_36_value = per_36_value * ewma_multiplier
+                        logger.info(
+                            f"EWMA adjustment for {player.name} {stat_type}: "
+                            f"{original:.2f} → {per_36_value:.2f} ({ewma_multiplier:.2f}x)"
+                        )
+            except Exception as e:
+                logger.debug(f"EWMA calculation failed for {player.name} {stat_type}: {e}")
+
+        # Fallback to PlayerStats (most recent game)
         if per_36_value is None:
-            player_stats = self.db.query(PlayerStats).filter(
-                PlayerStats.player_id == player.id
-            ).order_by(PlayerStats.created_at.desc()).first()
+            player_stats = (
+                self.db.query(PlayerStats)
+                .filter(PlayerStats.player_id == player.id)
+                .order_by(PlayerStats.created_at.desc())
+                .first()
+            )
 
             if player_stats:
                 stat_value = getattr(player_stats, stat_type, None)
@@ -260,126 +232,118 @@ class PredictionService:
                     per_36_value = stat_value * (36.0 / minutes)
                     logger.debug(f"Using PlayerStats for {player.name}: {stat_type}_per_36 = {per_36_value}")
 
-        # STEP 3: Final fallback to position averages
+        # Final fallback to position averages
         if per_36_value is None:
             position = player.position if player.position else None
-            averages = POSITION_AVERAGES.get(position, POSITION_AVERAGES[None])
-            per_36_value = averages.get(stat_type, 10.0)
+            averages = self.get_position_averages()
+            per_36_value = averages.get(position, averages[None]).get(stat_type, 10.0)
             logger.debug(f"Using position averages for {player.name}: {stat_type}_per_36 = {per_36_value}")
 
-        # Get or estimate minutes
-        self_injury_data = injury_context.get('self_injury') or {}
-        self_injury_status = self_injury_data.get('status')
+        # Get minutes projection
+        minutes_projection = self.lineup_service.get_player_minutes_projection(player.id, game.id)
+        if minutes_projection is None:
+            minutes_projection = 28  # Default starter minutes
 
-        if self_injury_status == 'returning':
-            # Use restricted minutes for returnees (18-25 typically)
-            games_played = (injury_context.get('self_injury') or {}).get('games_played_since_return', 0)
-            minutes_projection = 18 + min(games_played * 2, 12)  # Progressive increase
-        elif self_injury_status in ['out', 'doubtful']:
-            minutes_projection = 0
-        elif self_injury_status == 'questionable':
-            minutes_projection = 20
-        elif minutes_projection is None or minutes_projection == 0:
-            # Check lineup data if no projection provided
-            minutes_projection = self.lineup_service.get_player_minutes_projection(player.id, game_id)
-            if minutes_projection is None:
-                # Default to starter minutes if unknown
-                minutes_projection = 28
-
-        # STEP 4: Calculate prediction: per_36 × (minutes / 36)
+        # Calculate prediction: per_36 × (minutes / 36)
         predicted_value = per_36_value * (minutes_projection / 36.0)
 
-        # Apply teammate boost (if teammates are out)
-        teammate_count = len(injury_context.get('teammate_injuries', []))
-        if teammate_count > 0:
-            # Small boost for increased usage
-            predicted_value *= (1.0 + min(teammate_count * 0.03, 0.10))
+        # Apply opponent defensive adjustment
+        opponent_team = None
+        if player.team == game.home_team:
+            opponent_team = game.away_team
+        elif player.team == game.away_team:
+            opponent_team = game.home_team
 
-        # Minimal variance (5% instead of 15%) since using actual player data
-        variance = random.uniform(-0.05, 0.05)
-        predicted_value *= (1.0 + variance)
+        if opponent_team:
+            try:
+                original_value = predicted_value
+                predicted_value = self.opponent_adjustment_service.apply_opponent_adjustment(
+                    base_prediction=predicted_value,
+                    opponent_team=opponent_team,
+                    stat_type=stat_type
+                )
+                if abs(predicted_value - original_value) > 0.5:
+                    logger.info(
+                        f"Opponent adjustment for {player.name} vs {opponent_team}: "
+                        f"{original_value:.2f} → {predicted_value:.2f}"
+                    )
+            except Exception as e:
+                logger.debug(f"Opponent adjustment failed: {e}")
+
+        # Apply minimal variance
+        predicted_value = self._apply_variance(predicted_value, stat_type)
 
         return max(0, round(predicted_value, 2))
 
-    def _calculate_confidence(
+    def _adjust_predicted_value(
         self,
         player: Player,
         stat_type: str,
         predicted_value: float,
-        injury_context: Optional[Dict] = None,
-        game_id: Optional[str] = None
-    ) -> float:
+        game: Game
+    ) -> Optional[float]:
         """
-        Calculate confidence score for a prediction.
-
-        Confidence is based on:
-        - Player's historical data availability (higher if we have per-36 stats)
-        - Injury status adjustments
-        - Teammate injury boosts (clear path = higher confidence)
-        - Position-stat alignment
-        - Minutes projection certainty
-        - Historical hit rate weighting (NEW: tracks how often player hits their lines)
-
-        Returns value between 0.0 and 1.0
+        Apply NBA-specific adjustments based on injury context.
+        Returns None to skip prediction for OUT players.
         """
+        injury_context = self.injury_service.get_player_injury_context(player.id, game.id)
+
         if injury_context is None:
             injury_context = {}
 
-        # Base confidence
-        confidence = 0.55
+        # Skip predictions for players who are OUT
+        if (injury_context.get('self_injury') or {}).get('status') == 'out':
+            logger.info(f"Skipping prediction for {player.name} - status: OUT")
+            return None
 
-        # Check if we have historical stats for this player
-        player_stats = self.db.query(PlayerStats).filter(
-            PlayerStats.player_id == player.id
-        ).first()
+        # Apply teammate boost (if teammates are out)
+        teammate_count = len(injury_context.get('teammate_injuries', []))
+        if teammate_count > 0:
+            predicted_value *= (1.0 + min(teammate_count * 0.03, 0.10))
 
-        if player_stats:
-            confidence += 0.10  # Higher confidence with actual data
+        return predicted_value
+
+    def _adjust_confidence(
+        self,
+        player: Player,
+        stat_type: str,
+        predicted_value: float,
+        base_confidence: float,
+        game: Game
+    ) -> float:
+        """
+        Apply NBA-specific confidence adjustments:
+        - Injury status penalties
+        - Teammate injury boosts
+        - Historical hit rate weighting
+        - Volatility penalty
+        """
+        injury_context = self.injury_service.get_player_injury_context(player.id, game.id)
+
+        if injury_context is None:
+            injury_context = {}
+
+        confidence = base_confidence
 
         # Apply injury status adjustments
         self_injury_data = injury_context.get('self_injury') or {}
         self_injury_status = self_injury_data.get('status')
 
-        if self_injury_status == 'out':
-            confidence -= 0.30  # Heavy penalty for OUT players
-        elif self_injury_status == 'doubtful':
-            confidence -= 0.20  # Significant penalty for doubtful
+        if self_injury_status == 'doubtful':
+            confidence -= 0.20
         elif self_injury_status == 'questionable':
-            confidence -= 0.10  # Moderate penalty for questionable
+            confidence -= 0.10
         elif self_injury_status == 'returning':
-            confidence -= 0.05  # Minor penalty for returning (efficiency intact)
+            confidence -= 0.05
         elif self_injury_status == 'day-to-day':
-            confidence -= 0.08  # Small penalty for day-to-day
+            confidence -= 0.08
 
-        # Boost confidence when teammates are out (clear path to usage)
+        # Boost confidence when teammates are out
         teammate_count = len(injury_context.get('teammate_injuries', []))
         if teammate_count > 0:
-            confidence += min(teammate_count * 0.03, 0.08)  # Max +8%
+            confidence += min(teammate_count * 0.03, 0.08)
 
-        # Boost confidence if stat type aligns with position
-        position = player.position if player.position else None
-        position_stat_match = {
-            "PG": "assists",
-            "SG": "points",
-            "SF": "points",
-            "PF": "rebounds",
-            "C": "rebounds"
-        }
-
-        if position and position_stat_match.get(position) == stat_type:
-            confidence += 0.08  # +8% for position-appropriate stats
-
-        # Minutes projection certainty
-        minutes_projection = injury_context.get('minutes_projection')
-        if minutes_projection and minutes_projection > 0:
-            if minutes_projection >= 28:
-                confidence += 0.05  # Clear starter role
-            elif minutes_projection <= 10:
-                confidence -= 0.05  # Limited role uncertainty
-
-        # NEW: Apply historical hit rate weighting
-        base_confidence = confidence
-
+        # Apply historical hit rate weighting
         try:
             from app.services.nba.historical_odds_service import HistoricalOddsService
 
@@ -396,10 +360,8 @@ class PredictionService:
                 total_games=hit_rate_data["total_games"]
             )
 
-            # Apply weight to confidence
-            confidence = base_confidence * hit_rate_weight
+            confidence = confidence * hit_rate_weight
 
-            # Log the adjustment
             if hit_rate_data["total_games"] >= 5:
                 logger.info(
                     f"Hit rate adjustment for {player.name} {stat_type}: "
@@ -409,29 +371,94 @@ class PredictionService:
                 )
 
         except Exception as e:
-            # Gracefully handle errors - use base confidence
             logger.debug(f"Could not apply hit rate weighting for {player.name} {stat_type}: {e}")
-            confidence = base_confidence
 
-        # Add small randomness to simulate model uncertainty
-        confidence += random.uniform(-0.05, 0.05)
+        # Apply volatility penalty
+        try:
+            cv_result = self.volatility_service.calculate_cv(
+                player_id=player.id,
+                stat_type=stat_type,
+                games_back=10
+            )
+
+            if cv_result["sample_size"] >= 3:
+                volatility_penalty = self.volatility_service.get_confidence_penalty(
+                    cv=cv_result["cv"],
+                    stat_type=stat_type
+                )
+                confidence += volatility_penalty
+
+                if abs(volatility_penalty) > 0.01:
+                    logger.info(
+                        f"Volatility penalty for {player.name} {stat_type}: "
+                        f"CV={cv_result['cv']:.3f} ({cv_result['volatility_level']}) "
+                        f"penalty={volatility_penalty:.3f} "
+                        f"confidence={base_confidence:.3f}->{confidence:.3f}"
+                    )
+        except Exception as e:
+            logger.debug(f"Volatility penalty calculation failed: {e}")
 
         return round(max(0.25, min(0.80, confidence)), 2)
 
     def _get_recommendation(self, confidence: float) -> str:
-        """
-        Get recommendation based on confidence score.
-
-        Returns:
-            "OVER", "UNDER", or "NONE"
-        """
+        """NBA uses slightly higher threshold for recommendations."""
         if confidence >= 0.60:
-            # High confidence - make a recommendation
-            import random
             return random.choice(["OVER", "UNDER"])
         else:
-            # Low confidence - no recommendation
             return "NONE"
+
+    # ========================================================================
+    # LAZY-LOADED SERVICE PROPERTIES
+    # ========================================================================
+
+    @property
+    def injury_service(self):
+        if self._injury_service is None:
+            from app.services.nba.injury_service import InjuryService
+            self._injury_service = InjuryService(self.db)
+        return self._injury_service
+
+    @property
+    def lineup_service(self):
+        if self._lineup_service is None:
+            from app.services.nba.lineup_service import LineupService
+            self._lineup_service = LineupService(self.db)
+        return self._lineup_service
+
+    @property
+    def nba_api_service(self):
+        if self._nba_api_service is None:
+            from app.services.nba.nba_api_service import NbaApiService
+            self._nba_api_service = NbaApiService(self.db)
+        return self._nba_api_service
+
+    @property
+    def sync_orchestrator(self):
+        if self._sync_orchestrator is None:
+            from app.services.sync.orchestrator import SyncOrchestrator
+            self._sync_orchestrator = SyncOrchestrator(self.db)
+        return self._sync_orchestrator
+
+    @property
+    def weighted_stats_service(self):
+        if self._weighted_stats_service is None:
+            from app.services.nba.weighted_stats_service import WeightedStatsService
+            self._weighted_stats_service = WeightedStatsService(self.db)
+        return self._weighted_stats_service
+
+    @property
+    def volatility_service(self):
+        if self._volatility_service is None:
+            from app.services.nba.volatility_service import VolatilityService
+            self._volatility_service = VolatilityService(self.db)
+        return self._volatility_service
+
+    @property
+    def opponent_adjustment_service(self):
+        if self._opponent_adjustment_service is None:
+            from app.services.nba.opponent_adjustment_service import OpponentAdjustmentService
+            self._opponent_adjustment_service = OpponentAdjustmentService(self.db)
+        return self._opponent_adjustment_service
 
 
 def uuid_uuid() -> str:

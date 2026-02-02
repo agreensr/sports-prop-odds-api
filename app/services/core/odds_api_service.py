@@ -5,16 +5,19 @@ This service provides access to betting odds from bookmakers including:
 - Game odds (moneyline, spread, totals)
 - Player props odds (points, rebounds, assists, etc.)
 
-Free Tier: 500 requests/month
-Strategy: Aggressive caching to minimize usage
+Paid Plan: 20,000 requests/month (~666/day)
+Quota Tracking: Response headers x-requests-remaining, x-requests-used
 """
 import asyncio
-import logging
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional
 import httpx
+from tenacity import retry, stop_after_attempt, wait_exponential
 
-logger = logging.getLogger(__name__)
+from app.core.logging import get_logger
+from app.services.core.circuit_breaker import odds_api_breaker, CircuitBreakerError
+
+logger = get_logger(__name__)
 
 # The Odds API base URL
 THE_ODDS_API_BASE = "https://api.the-odds-api.com/v4"
@@ -24,23 +27,37 @@ class OddsApiService:
     """
     The Odds API service for betting odds.
 
-    Free Tier: 500 requests/month (~16/day)
-    Strategy: Aggressive caching to minimize usage
+    Paid Plan: 20,000 requests/month (~666/day)
+    Quota Tracking: Captures x-requests-remaining and x-requests-used headers
+
+    Cache TTL is dynamic based on sport season status for better data freshness
+    during active seasons and better performance during offseason.
     """
 
-    def __init__(self, api_key: str, cache_ttl: int = 600):
+    def __init__(self, api_key: str, cache_ttl: Optional[int] = None, default_sport: str = "nba"):
         """
         Initialize The Odds API service.
 
         Args:
             api_key: The Odds API key
-            cache_ttl: Default cache TTL in seconds (default: 10 minutes)
+            cache_ttl: Override cache TTL in seconds. If None, uses dynamic
+                      TTL based on season status (10 min season, 24h offseason).
+            default_sport: Default sport for season-aware TTL (default: 'nba')
         """
+        if cache_ttl is None:
+            from app.core.config import get_dynamic_cache_ttl
+            cache_ttl = get_dynamic_cache_ttl(default_sport)
+
         self.api_key = api_key
         self.cache_ttl = cache_ttl
         self._cache: Dict[str, tuple] = {}  # key -> (data, expiry)
         self._lock = asyncio.Lock()
         self._client: Optional[httpx.AsyncClient] = None
+
+        # Quota tracking (from response headers)
+        self._requests_remaining: Optional[int] = None
+        self._requests_used: Optional[int] = None
+        self._quota_last_updated: Optional[datetime] = None
 
     async def _get_client(self) -> httpx.AsyncClient:
         """Get or create HTTP client."""
@@ -90,7 +107,149 @@ class OddsApiService:
             await self._client.aclose()
             self._client = None
 
+    def _update_quota_from_headers(self, response: httpx.Response):
+        """
+        Update quota tracking from response headers.
+
+        The Odds API returns:
+        - x-requests-remaining: Requests left in current billing period
+        - x-requests-used: Requests used in current billing period
+
+        Args:
+            response: HTTP response object
+        """
+        try:
+            remaining = response.headers.get('x-requests-remaining')
+            used = response.headers.get('x-requests-used')
+
+            if remaining:
+                self._requests_remaining = int(remaining)
+            if used:
+                self._requests_used = int(used)
+
+            self._quota_last_updated = datetime.now()
+
+            logger.info(
+                f"The Odds API Quota: {self._requests_remaining} remaining, "
+                f"{self._requests_used} used"
+            )
+
+            # Alert thresholds: Monthly quota is 20,000 requests
+            # - WARNING when < 20% remaining (< 4000 requests)
+            # - ERROR when < 5% remaining (< 1000 requests)
+            if self._requests_remaining is not None:
+                if self._requests_remaining < 1000:
+                    logger.error(
+                        f"CRITICAL: Odds API quota critically low! "
+                        f"Only {self._requests_remaining} requests remaining (< 5%). "
+                        f"Consider upgrading plan or reducing usage."
+                    )
+                elif self._requests_remaining < 4000:
+                    logger.warning(
+                        f"WARNING: Odds API quota running low. "
+                        f"{self._requests_remaining} requests remaining (< 20%)."
+                    )
+
+            # Update Prometheus metrics
+            try:
+                from app.core.metrics import update_odds_api_quota
+                if self._requests_remaining is not None and self._requests_used is not None:
+                    update_odds_api_quota(
+                        remaining=self._requests_remaining,
+                        used=self._requests_used,
+                        monthly_quota=20000
+                    )
+            except ImportError:
+                # Metrics module not available - skip
+                pass
+
+        except (ValueError, TypeError) as e:
+            logger.warning(f"Failed to parse quota headers: {e}")
+
+    def get_quota_status(self) -> Dict:
+        """
+        Get current quota status.
+
+        Returns:
+            Dict with remaining/used requests and last update time
+        """
+        return {
+            "requests_remaining": self._requests_remaining,
+            "requests_used": self._requests_used,
+            "last_updated": self._quota_last_updated.isoformat() if self._quota_last_updated else None,
+            "monthly_quota": 20000,
+            "quota_percentage": round(
+                (self._requests_used / 20000 * 100) if self._requests_used else 0, 2
+            )
+        }
+
     # Game Odds Methods
+
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=2, max=10)
+    )
+    @odds_api_breaker
+    async def _fetch_games_with_breaker(
+        self,
+        days_ahead: int,
+        client: httpx.AsyncClient
+    ) -> List[Dict]:
+        """
+        Internal method to fetch games - wrapped with circuit breaker.
+
+        Args:
+            days_ahead: Number of days ahead to fetch
+            client: HTTP client
+
+        Returns:
+            List of games with odds data
+        """
+        all_games = {}
+
+        for market in ["h2h", "spreads", "totals"]:
+            params = {
+                "apiKey": self.api_key,
+                "days": days_ahead,
+                "market": market,
+                "regions": "us"
+            }
+
+            response = await client.get(
+                f"{THE_ODDS_API_BASE}/sports/basketball_nba/odds",
+                params=params
+            )
+            response.raise_for_status()
+
+            # Track quota from response headers
+            self._update_quota_from_headers(response)
+
+            data = response.json()
+
+            # Merge games by ID
+            for game in data:
+                game_id = game.get("id")
+                if game_id not in all_games:
+                    all_games[game_id] = {
+                        "id": game_id,
+                        "sport_key": game.get("sport_key"),
+                        "sport_title": game.get("sport_title"),
+                        "commence_time": game.get("commence_time"),
+                        "home_team": game.get("home_team"),
+                        "away_team": game.get("away_team"),
+                        "bookmakers": []
+                    }
+
+                # Add bookmaker data
+                for bookmaker in game.get("bookmakers", []):
+                    all_games[game_id]["bookmakers"].append({
+                        "key": bookmaker.get("key"),
+                        "title": bookmaker.get("title"),
+                        "last_update": bookmaker.get("last_update"),
+                        "markets": bookmaker.get("markets", [])
+                    })
+
+        return list(all_games.values())
 
     async def get_upcoming_games_with_odds(
         self,
@@ -113,59 +272,61 @@ class OddsApiService:
         try:
             client = await self._get_client()
 
-            # Fetch odds for h2h (moneyline), spreads, and totals
-            all_games = {}
-
-            for market in ["h2h", "spreads", "totals"]:
-                params = {
-                    "apiKey": self.api_key,
-                    "days": days_ahead,
-                    "market": market,
-                    "regions": "us"
-                }
-
-                response = await client.get(
-                    f"{THE_ODDS_API_BASE}/sports/basketball_nba/odds",
-                    params=params
-                )
-                response.raise_for_status()
-
-                data = response.json()
-
-                # Merge games by ID
-                for game in data:
-                    game_id = game.get("id")
-                    if game_id not in all_games:
-                        all_games[game_id] = {
-                            "id": game_id,
-                            "sport_key": game.get("sport_key"),
-                            "sport_title": game.get("sport_title"),
-                            "commence_time": game.get("commence_time"),
-                            "home_team": game.get("home_team"),
-                            "away_team": game.get("away_team"),
-                            "bookmakers": []
-                        }
-
-                    # Add bookmaker data
-                    for bookmaker in game.get("bookmakers", []):
-                        all_games[game_id]["bookmakers"].append({
-                            "key": bookmaker.get("key"),
-                            "title": bookmaker.get("title"),
-                            "last_update": bookmaker.get("last_update"),
-                            "markets": bookmaker.get("markets", [])
-                        })
-
-            # Convert to list and cache
-            result = list(all_games.values())
+            # Call through circuit breaker
+            result = await self._fetch_games_with_breaker(days_ahead, client)
 
             # Cache for 10 minutes (odds change frequently)
             await self._set_cache(cache_key, result, ttl=600)
 
             return result
 
+        except CircuitBreakerError:
+            logger.warning("Odds API circuit breaker is OPEN - returning empty list")
+            return []
         except Exception as e:
             logger.error(f"Error fetching NBA game odds: {e}")
             return []
+
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=2, max=10)
+    )
+    @odds_api_breaker
+    async def _fetch_player_props_with_breaker(
+        self,
+        event_id: str,
+        player_props_markets: str,
+        client: httpx.AsyncClient
+    ) -> tuple[Dict, int]:
+        """
+        Internal method to fetch player props - wrapped with circuit breaker.
+
+        Args:
+            event_id: The Odds API event ID
+            player_props_markets: Comma-separated list of markets
+            client: HTTP client
+
+        Returns:
+            Tuple of (data dict, status code)
+        """
+        params = {
+            "apiKey": self.api_key,
+            "markets": player_props_markets,
+            "regions": "us"
+        }
+
+        response = await client.get(
+            f"{THE_ODDS_API_BASE}/sports/basketball_nba/events/{event_id}/odds",
+            params=params
+        )
+
+        # Track quota from response headers
+        self._update_quota_from_headers(response)
+
+        status_code = response.status_code
+        data = response.json() if status_code == 200 else {}
+
+        return (data, status_code)
 
     async def get_event_player_props(
         self,
@@ -185,28 +346,20 @@ class OddsApiService:
         if cached:
             return cached
 
+        # IMPORTANT: Request ALL player props markets in ONE API call
+        # Using 'markets' (plural) with comma-separated list instead of 'market' (singular)
+        # This prevents the API from returning fallback h2h markets when player props aren't available
+        player_props_markets = "player_points,player_rebounds,player_assists,player_threes"
+
         try:
             client = await self._get_client()
 
-            # IMPORTANT: Request ALL player props markets in ONE API call
-            # Using 'markets' (plural) with comma-separated list instead of 'market' (singular)
-            # This prevents the API from returning fallback h2h markets when player props aren't available
-            player_props_markets = "player_points,player_rebounds,player_assists,player_threes"
-
-            params = {
-                "apiKey": self.api_key,
-                "markets": player_props_markets,
-                "regions": "us"
-            }
-
-            response = await client.get(
-                f"{THE_ODDS_API_BASE}/sports/basketball_nba/events/{event_id}/odds",
-                params=params
+            # Call through circuit breaker
+            data, status_code = await self._fetch_player_props_with_breaker(
+                event_id, player_props_markets, client
             )
 
-            if response.status_code == 200:
-                data = response.json()
-
+            if status_code == 200:
                 # Structure the response with markets keyed by market type
                 # The API returns a single game object with all requested markets
                 result = {
@@ -228,13 +381,20 @@ class OddsApiService:
 
                 return result
             else:
-                logger.warning(f"Failed to fetch player props for event {event_id}: {response.status_code}")
+                logger.warning(f"Failed to fetch player props for event {event_id}: {status_code}")
                 return {
                     "event_id": event_id,
                     "markets": player_props_markets,
                     "data": {"bookmakers": []}
                 }
 
+        except CircuitBreakerError:
+            logger.warning(f"Odds API circuit breaker is OPEN for event {event_id} - returning empty player props")
+            return {
+                "event_id": event_id,
+                "markets": player_props_markets,
+                "data": {"bookmakers": []}
+            }
         except Exception as e:
             logger.error(f"Error fetching NBA player props for event {event_id}: {e}")
             return {

@@ -1,0 +1,166 @@
+---
+// ============================================================================
+// Header.astro - App header with navigation
+// ============================================================================
+
+import { Link } from '../Router';
+const currentPath = Astro.url.hash?.slice(1) || '/';
+
+const navItems = [
+  { path: '/', label: 'Home' },
+  { path: '/teams', label: 'Teams' },
+  { path: '/predictions', label: 'Predictions' },
+  { path: '/injuries', label: 'Injuries' },
+  { path: '/parlays', label: 'Parlays' },
+];
+---
+
+<header class="header">
+  <div class="container">
+    <div class="header-inner">
+      <!-- Logo -->
+      <Link to="/" class="logo">
+        <svg class="logo-icon" width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="16" cy="16" r="14" stroke="#dc2626" stroke-width="2" fill="none"/>
+          <path d="M10 16h12M16 10v12" stroke="#dc2626" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        <span class="logo-text">NBA AI</span>
+      </Link>
+
+      <!-- Navigation -->
+      <nav class="nav">
+        {navItems.map(item => (
+          <Link
+            to={item.path}
+            class:list={['nav-link', { active: currentPath === item.path || currentPath.startsWith(item.path + '/') }]}
+          >
+            {item.label}
+          </Link>
+        ))}
+      </nav>
+
+      <!-- API Status Indicator -->
+      <div class="api-status" id="api-status">
+        <span class="status-dot"></span>
+        <span class="status-text">Connecting...</span>
+      </div>
+    </div>
+  </div>
+</header>
+
+<style>
+  .header {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    background-color: var(--color-bg-primary);
+    border-bottom: 1px solid var(--color-border-default);
+  }
+
+  .header-inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 64px;
+    gap: var(--spacing-lg);
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--color-text-primary);
+    text-decoration: none;
+    transition: color 0.15s ease;
+  }
+
+  .logo:hover {
+    color: var(--color-brand-600);
+    text-decoration: none;
+  }
+
+  .logo-icon {
+    flex-shrink: 0;
+  }
+
+  .logo-text {
+    background: linear-gradient(135deg, #dc2626 0%, #f87171 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .nav {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+  }
+
+  .nav-link {
+    padding: var(--spacing-sm) var(--spacing-md);
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--color-text-secondary);
+    text-decoration: none;
+    border-radius: var(--radius-md);
+    transition: all 0.15s ease;
+  }
+
+  .nav-link:hover {
+    color: var(--color-text-primary);
+    background-color: var(--color-bg-tertiary);
+    text-decoration: none;
+  }
+
+  .nav-link.active {
+    color: var(--color-brand-600);
+    background-color: rgb(220 38 38 / 0.1);
+  }
+
+  .api-status {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-xs) var(--spacing-sm);
+    font-size: 0.75rem;
+    background-color: var(--color-bg-secondary);
+    border: 1px solid var(--color-border-default);
+    border-radius: var(--radius-sm);
+  }
+
+  .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background-color: var(--color-text-muted);
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  .api-status.connected .status-dot {
+    background-color: #22c55e;
+  }
+
+  .api-status.disconnected .status-dot {
+    background-color: #ef4444;
+  }
+
+  .api-status.syncing .status-dot {
+    background-color: #eab308;
+  }
+
+  .status-text {
+    color: var(--color-text-tertiary);
+  }
+
+  @media (max-width: 768px) {
+    .nav {
+      display: none;
+    }
+
+    .logo-text {
+      display: none;
+    }
+  }
+</style>

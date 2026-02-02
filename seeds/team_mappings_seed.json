@@ -1,0 +1,304 @@
+{
+  "teams": [
+    {
+      "id": "uuid-1",
+      "nba_team_id": 1610612737,
+      "nba_abbreviation": "ATL",
+      "nba_full_name": "Atlanta Hawks",
+      "nba_city": "Atlanta",
+      "odds_api_name": "Atlanta Hawks",
+      "odds_api_key": "atlantahawks",
+      "alternate_names": ["ATL", "Hawks", "Atlanta"]
+    },
+    {
+      "id": "uuid-2",
+      "nba_team_id": 1610612738,
+      "nba_abbreviation": "BOS",
+      "nba_full_name": "Boston Celtics",
+      "nba_city": "Boston",
+      "odds_api_name": "Boston Celtics",
+      "odds_api_key": "bostonceltics",
+      "alternate_names": ["BOS", "Celtics", "Boston"]
+    },
+    {
+      "id": "uuid-3",
+      "nba_team_id": 1610612739,
+      "nba_abbreviation": "CLE",
+      "nba_full_name": "Cleveland Cavaliers",
+      "nba_city": "Cleveland",
+      "odds_api_name": "Cleveland Cavaliers",
+      "odds_api_key": "clevelandcavaliers",
+      "alternate_names": ["CLE", "Cavaliers", "Cavs", "Cleveland"]
+    },
+    {
+      "id": "uuid-4",
+      "nba_team_id": 1610612740,
+      "nba_abbreviation": "NOP",
+      "nba_full_name": "New Orleans Pelicans",
+      "nba_city": "New Orleans",
+      "odds_api_name": "New Orleans Pelicans",
+      "odds_api_key": "neworleanspelicans",
+      "alternate_names": ["NOP", "Pelicans", "New Orleans", "NO"]
+    },
+    {
+      "id": "uuid-5",
+      "nba_team_id": 1610612741,
+      "nba_abbreviation": "CHI",
+      "nba_full_name": "Chicago Bulls",
+      "nba_city": "Chicago",
+      "odds_api_name": "Chicago Bulls",
+      "odds_api_key": "chicagobulls",
+      "alternate_names": ["CHI", "Bulls", "Chicago"]
+    },
+    {
+      "id": "uuid-6",
+      "nba_team_id": 1610612742,
+      "nba_abbreviation": "DAL",
+      "nba_full_name": "Dallas Mavericks",
+      "nba_city": "Dallas",
+      "odds_api_name": "Dallas Mavericks",
+      "odds_api_key": "dallasmavericks",
+      "alternate_names": ["DAL", "Mavericks", "Mavs", "Dallas"]
+    },
+    {
+      "id": "uuid-7",
+      "nba_team_id": 1610612743,
+      "nba_abbreviation": "DEN",
+      "nba_full_name": "Denver Nuggets",
+      "nba_city": "Denver",
+      "odds_api_name": "Denver Nuggets",
+      "odds_api_key": "denvernuggets",
+      "alternate_names": ["DEN", "Nuggets", "Denver"]
+    },
+    {
+      "id": "uuid-8",
+      "nba_team_id": 1610612744,
+      "nba_abbreviation": "GSW",
+      "nba_full_name": "Golden State Warriors",
+      "nba_city": "San Francisco",
+      "odds_api_name": "Golden State Warriors",
+      "odds_api_key": "goldenstatewarriors",
+      "alternate_names": ["GSW", "Warriors", "Golden State", "SFG"]
+    },
+    {
+      "id": "uuid-9",
+      "nba_team_id": 1610612745,
+      "nba_abbreviation": "HOU",
+      "nba_full_name": "Houston Rockets",
+      "nba_city": "Houston",
+      "odds_api_name": "Houston Rockets",
+      "odds_api_key": "houstonrockets",
+      "alternate_names": ["HOU", "Rockets", "Houston"]
+    },
+    {
+      "id": "uuid-10",
+      "nba_team_id": 1610612746,
+      "nba_abbreviation": "LAC",
+      "nba_full_name": "Los Angeles Clippers",
+      "nba_city": "Los Angeles",
+      "odds_api_name": "Los Angeles Clippers",
+      "odds_api_key": "losangelesclippers",
+      "alternate_names": ["LAC", "Clippers", "LA Clippers", "L.A. Clippers"]
+    },
+    {
+      "id": "uuid-11",
+      "nba_team_id": 1610612747,
+      "nba_abbreviation": "LAL",
+      "nba_full_name": "Los Angeles Lakers",
+      "nba_city": "Los Angeles",
+      "odds_api_name": "Los Angeles Lakers",
+      "odds_api_key": "losangeleslakers",
+      "alternate_names": ["LAL", "Lakers", "LA Lakers", "L.A. Lakers"]
+    },
+    {
+      "id": "uuid-12",
+      "nba_team_id": 1610612748,
+      "nba_abbreviation": "MIA",
+      "nba_full_name": "Miami Heat",
+      "nba_city": "Miami",
+      "odds_api_name": "Miami Heat",
+      "odds_api_key": "miamiheat",
+      "alternate_names": ["MIA", "Heat", "Miami"]
+    },
+    {
+      "id": "uuid-13",
+      "nba_team_id": 1610612749,
+      "nba_abbreviation": "MIL",
+      "nba_full_name": "Milwaukee Bucks",
+      "nba_city": "Milwaukee",
+      "odds_api_name": "Milwaukee Bucks",
+      "odds_api_key": "milwaukeebucks",
+      "alternate_names": ["MIL", "Bucks", "Milwaukee"]
+    },
+    {
+      "id": "uuid-14",
+      "nba_team_id": 1610612750,
+      "nba_abbreviation": "MIN",
+      "nba_full_name": "Minnesota Timberwolves",
+      "nba_city": "Minneapolis",
+      "odds_api_name": "Minnesota Timberwolves",
+      "odds_api_key": "minnesotatimberwolves",
+      "alternate_names": ["MIN", "Timberwolves", "T-Wolves", "Minnesota", "Twolves"]
+    },
+    {
+      "id": "uuid-15",
+      "nba_team_id": 1610612751,
+      "nba_abbreviation": "BKN",
+      "nba_full_name": "Brooklyn Nets",
+      "nba_city": "Brooklyn",
+      "odds_api_name": "Brooklyn Nets",
+      "odds_api_key": "brooklynnets",
+      "alternate_names": ["BKN", "Nets", "Brooklyn"]
+    },
+    {
+      "id": "uuid-16",
+      "nba_team_id": 1610612752,
+      "nba_abbreviation": "NYK",
+      "nba_full_name": "New York Knicks",
+      "nba_city": "New York",
+      "odds_api_name": "New York Knicks",
+      "odds_api_key": "newyorkknicks",
+      "alternate_names": ["NYK", "Knicks", "New York", "NY"]
+    },
+    {
+      "id": "uuid-17",
+      "nba_team_id": 1610612753,
+      "nba_abbreviation": "ORL",
+      "nba_full_name": "Orlando Magic",
+      "nba_city": "Orlando",
+      "odds_api_name": "Orlando Magic",
+      "odds_api_key": "orlandomagic",
+      "alternate_names": ["ORL", "Magic", "Orlando"]
+    },
+    {
+      "id": "uuid-18",
+      "nba_team_id": 1610612754,
+      "nba_abbreviation": "IND",
+      "nba_full_name": "Indiana Pacers",
+      "nba_city": "Indianapolis",
+      "odds_api_name": "Indiana Pacers",
+      "odds_api_key": "indianapacers",
+      "alternate_names": ["IND", "Pacers", "Indiana"]
+    },
+    {
+      "id": "uuid-19",
+      "nba_team_id": 1610612755,
+      "nba_abbreviation": "PHI",
+      "nba_full_name": "Philadelphia 76ers",
+      "nba_city": "Philadelphia",
+      "odds_api_name": "Philadelphia 76ers",
+      "odds_api_key": "philadelphia76ers",
+      "alternate_names": ["PHI", "76ers", "Sixers", "Philadelphia"]
+    },
+    {
+      "id": "uuid-20",
+      "nba_team_id": 1610612756,
+      "nba_abbreviation": "PHX",
+      "nba_full_name": "Phoenix Suns",
+      "nba_city": "Phoenix",
+      "odds_api_name": "Phoenix Suns",
+      "odds_api_key": "phoenixsuns",
+      "alternate_names": ["PHX", "Suns", "Phoenix"]
+    },
+    {
+      "id": "uuid-21",
+      "nba_team_id": 1610612757,
+      "nba_abbreviation": "POR",
+      "nba_full_name": "Portland Trail Blazers",
+      "nba_city": "Portland",
+      "odds_api_name": "Portland Trail Blazers",
+      "odds_api_key": "portlandtrailblazers",
+      "alternate_names": ["POR", "Trail Blazers", "Blazers", "Portland"]
+    },
+    {
+      "id": "uuid-22",
+      "nba_team_id": 1610612758,
+      "nba_abbreviation": "SAC",
+      "nba_full_name": "Sacramento Kings",
+      "nba_city": "Sacramento",
+      "odds_api_name": "Sacramento Kings",
+      "odds_api_key": "sacramentokings",
+      "alternate_names": ["SAC", "Kings", "Sacramento"]
+    },
+    {
+      "id": "uuid-23",
+      "nba_team_id": 1610612759,
+      "nba_abbreviation": "SAS",
+      "nba_full_name": "San Antonio Spurs",
+      "nba_city": "San Antonio",
+      "odds_api_name": "San Antonio Spurs",
+      "odds_api_key": "sanantoniospurs",
+      "alternate_names": ["SAS", "Spurs", "San Antonio", "SA"]
+    },
+    {
+      "id": "uuid-24",
+      "nba_team_id": 1610612760,
+      "nba_abbreviation": "OKC",
+      "nba_full_name": "Oklahoma City Thunder",
+      "nba_city": "Oklahoma City",
+      "odds_api_name": "Oklahoma City Thunder",
+      "odds_api_key": "oklahomacitythunder",
+      "alternate_names": ["OKC", "Thunder", "Oklahoma City"]
+    },
+    {
+      "id": "uuid-25",
+      "nba_team_id": 1610612761,
+      "nba_abbreviation": "TOR",
+      "nba_full_name": "Toronto Raptors",
+      "nba_city": "Toronto",
+      "odds_api_name": "Toronto Raptors",
+      "odds_api_key": "torontoraptors",
+      "alternate_names": ["TOR", "Raptors", "Toronto"]
+    },
+    {
+      "id": "uuid-26",
+      "nba_team_id": 1610612762,
+      "nba_abbreviation": "UTA",
+      "nba_full_name": "Utah Jazz",
+      "nba_city": "Salt Lake City",
+      "odds_api_name": "Utah Jazz",
+      "odds_api_key": "utahjazz",
+      "alternate_names": ["UTA", "Jazz", "Utah"]
+    },
+    {
+      "id": "uuid-27",
+      "nba_team_id": 1610612763,
+      "nba_abbreviation": "MEM",
+      "nba_full_name": "Memphis Grizzlies",
+      "nba_city": "Memphis",
+      "odds_api_name": "Memphis Grizzlies",
+      "odds_api_key": "memphisgrizzlies",
+      "alternate_names": ["MEM", "Grizzlies", "Grizz", "Memphis"]
+    },
+    {
+      "id": "uuid-28",
+      "nba_team_id": 1610612764,
+      "nba_abbreviation": "WAS",
+      "nba_full_name": "Washington Wizards",
+      "nba_city": "Washington",
+      "odds_api_name": "Washington Wizards",
+      "odds_api_key": "washingtonwizards",
+      "alternate_names": ["WAS", "Wizards", "Washington", "DC"]
+    },
+    {
+      "id": "uuid-29",
+      "nba_team_id": 1610612765,
+      "nba_abbreviation": "DET",
+      "nba_full_name": "Detroit Pistons",
+      "nba_city": "Detroit",
+      "odds_api_name": "Detroit Pistons",
+      "odds_api_key": "detroitpistons",
+      "alternate_names": ["DET", "Pistons", "Detroit"]
+    },
+    {
+      "id": "uuid-30",
+      "nba_team_id": 1610612766,
+      "nba_abbreviation": "CHA",
+      "nba_full_name": "Charlotte Hornets",
+      "nba_city": "Charlotte",
+      "odds_api_name": "Charlotte Hornets",
+      "odds_api_key": "charlottehornets",
+      "alternate_names": ["CHA", "Hornets", "Charlotte"]
+    }
+  ]
+}

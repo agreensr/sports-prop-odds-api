@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
-from app.models.nba.models import ExpectedLineup, Player, Game
+from app.models import ExpectedLineup, Player, Game
 from app.core.database import get_db
 from app.services.nba.lineup_service import LineupService
 

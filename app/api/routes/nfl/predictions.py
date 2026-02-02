@@ -10,11 +10,12 @@ from datetime import date, datetime, timedelta
 from typing import List, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
+from slowapi import Limiter
 
-from app.models.nba.models import Player, Game, Prediction, Base
+from app.models.nfl.models import Player, Game, Prediction, Base
 from app.core.database import get_db
 from app.services.nfl.nfl_service import NFLService, NFL_API_AVAILABLE
 
@@ -24,6 +25,11 @@ router = APIRouter(prefix="/api/nfl", tags=["nfl"])
 
 # Initialize NFL service
 nfl_service = NFLService()
+
+# Rate limiter - will be accessed via request.state
+def get_limiter(request: Request) -> Limiter:
+    """Get the rate limiter from app state."""
+    return request.app.state.limiter
 
 
 def prediction_to_dict(pred: Prediction) -> dict:
@@ -112,10 +118,19 @@ async def get_nfl_players(
 
 @router.get("/predictions/player/{player_id}")
 async def get_nfl_player_predictions(
+    request: Request,
     player_id: str,
     min_confidence: float = Query(default=0.5, ge=0, le=1),
     db: Session = Depends(get_db)
 ):
+    """
+    Get NFL player predictions with rate limiting.
+
+    Rate limit: 10 requests per minute.
+    """
+    # Apply rate limit for prediction endpoints
+    limiter = get_limiter(request)
+    limiter.check_request_limit(request, "10/minute")[0]  # Raises RateLimitExceeded if over limit
     """
     Get NFL predictions for a specific player.
 

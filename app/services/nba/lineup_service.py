@@ -23,6 +23,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import and_
 import logging
 import uuid
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 logger = logging.getLogger(__name__)
 
@@ -97,6 +98,35 @@ class LineupService:
         async with self._lock:
             self._cache[key] = CacheEntry(data, valid_until)
 
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=2, max=10),
+        retry=retry_if_exception_type((httpx.HTTPStatusError, httpx.RequestError, httpx.TimeoutException))
+    )
+    async def _fetch_firecrawl_with_retry(
+        self,
+        client: httpx.AsyncClient,
+        url: str
+    ) -> Dict:
+        """
+        Internal method to fetch data from Firecrawl with retry logic.
+
+        Args:
+            client: HTTP client
+            url: URL to scrape
+
+        Returns:
+            Parsed JSON response
+        """
+        payload = {"url": url}
+        response = await client.post(
+            f"{FIRECRAWL_BASE_URL}/v1/scrape",
+            json=payload,
+            headers={"Content-Type": "application/json"}
+        )
+        response.raise_for_status()
+        return response.json()
+
     async def fetch_lineups_from_firecrawl(self, source: str = "rotowire") -> List[Dict]:
         """
         Fetch lineup data from a projection source via Firecrawl.
@@ -124,18 +154,12 @@ class LineupService:
             return cached
 
         try:
-            # Call Firecrawl API
+            # Call Firecrawl API with retry logic
             async with httpx.AsyncClient(timeout=60.0) as client:
-                payload = {
-                    "url": source_config["url"]
-                }
-                response = await client.post(
-                    f"{FIRECRAWL_BASE_URL}/v1/scrape",
-                    json=payload,
-                    headers={"Content-Type": "application/json"}
+                data = await self._fetch_firecrawl_with_retry(
+                    client,
+                    source_config["url"]
                 )
-                response.raise_for_status()
-                data = response.json()
 
             # Parse the scraped content
             content = data.get("data", {}).get("markdown", "")
@@ -259,7 +283,7 @@ class LineupService:
         Returns:
             Number of lineups stored
         """
-        from app.models.nba.models import Player, ExpectedLineup
+        from app.models import Player, ExpectedLineup
 
         count = 0
 
@@ -342,7 +366,7 @@ class LineupService:
         Returns:
             Dict with team abbreviations as keys and lists of players as values
         """
-        from app.models.nba.models import ExpectedLineup, Player
+        from app.models import ExpectedLineup, Player
 
         lineups = self.db.query(ExpectedLineup).join(Player).filter(
             ExpectedLineup.game_id == game_id
@@ -379,7 +403,7 @@ class LineupService:
         Returns:
             Projected minutes or None if no projection available
         """
-        from app.models.nba.models import ExpectedLineup
+        from app.models import ExpectedLineup
 
         query = self.db.query(ExpectedLineup).filter(
             ExpectedLineup.player_id == player_id
@@ -416,7 +440,7 @@ class LineupService:
         Returns:
             Estimated minutes (default 28 for unknown players)
         """
-        from app.models.nba.models import ExpectedLineup, Player
+        from app.models import ExpectedLineup, Player
 
         # First try to get specific projection
         specific = self.get_player_minutes_projection(player_id, game_id)
@@ -464,7 +488,7 @@ class LineupService:
         Returns:
             Number of lineup entries updated
         """
-        from app.models.nba.models import ExpectedLineup, Player
+        from app.models import ExpectedLineup, Player
 
         count = 0
         player_stats = boxscore_data.get('PlayerStats', [])

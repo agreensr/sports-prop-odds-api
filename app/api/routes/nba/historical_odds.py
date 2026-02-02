@@ -203,7 +203,7 @@ async def capture_game_odds(
     - Pre-game: To capture opening odds
  - Post-game: As part of backfill process
     """
-    from app.models.nba.models import Game
+    from app.models import Game
 
     game = db.query(Game).filter(Game.id == game_id).first()
     if not game:
@@ -236,7 +236,7 @@ async def resolve_game_snapshots(
 
     Should be called after games are completed and boxscores are available.
     """
-    from app.models.nba.models import Game
+    from app.models import Game
 
     game = db.query(Game).filter(Game.id == game_id).first()
     if not game:
@@ -262,7 +262,7 @@ async def get_historical_odds_stats(
 
     Returns counts of snapshots, resolution rates, and data coverage.
     """
-    from app.models.nba.models import HistoricalOddsSnapshot
+    from app.models import HistoricalOddsSnapshot
     from sqlalchemy import func
 
     # Total snapshots

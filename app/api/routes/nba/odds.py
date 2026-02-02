@@ -15,16 +15,19 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+from app.core.config import settings
 from app.services.core.odds_api_service import get_odds_service
 from app.services.data_sources.odds_mapper import OddsMapper
-from app.models.nba.models import Game, GameOdds, Player, Prediction
+from app.models import Game, GameOdds, Player, Prediction
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/odds", tags=["odds"])
 
-# Get API key from environment
-ODDS_API_KEY = os.getenv("THE_ODDS_API_KEY", "")
+# Get API key from config (which loads from .env)
+def get_odds_api_key() -> str:
+    """Get Odds API key from settings."""
+    return settings.THE_ODDS_API_KEY or os.getenv("THE_ODDS_API_KEY", "")
 
 
 def prediction_to_dict_with_odds(pred: Prediction) -> dict:
@@ -67,14 +70,15 @@ async def get_quota_status(db: Session = Depends(get_db)):
 
     Returns information about monthly request usage.
     """
-    if not ODDS_API_KEY:
+    api_key = get_odds_api_key()
+    if not api_key:
         raise HTTPException(
             status_code=500,
             detail="The Odds API key not configured. Set THE_ODDS_API_KEY environment variable."
         )
 
     try:
-        service = get_odds_service(ODDS_API_KEY)
+        service = get_odds_service(api_key)
         quota = await service.get_quota_status()
 
         return {
@@ -98,14 +102,15 @@ async def fetch_game_odds(
 
     Fetches moneyline, spread, and totals odds for upcoming NBA games.
     """
-    if not ODDS_API_KEY:
+    api_key = get_odds_api_key()
+    if not api_key:
         raise HTTPException(
             status_code=500,
             detail="The Odds API key not configured. Set THE_ODDS_API_KEY environment variable."
         )
 
     try:
-        service = get_odds_service(ODDS_API_KEY)
+        service = get_odds_service(api_key)
         mapper = OddsMapper(db)
 
         # Fetch game odds
@@ -216,14 +221,15 @@ async def fetch_player_props_for_game(
     Fetches player props odds for points, rebounds, assists, and threes.
     Updates existing predictions with odds pricing.
     """
-    if not ODDS_API_KEY:
+    api_key = get_odds_api_key()
+    if not api_key:
         raise HTTPException(
             status_code=500,
             detail="The Odds API key not configured. Set THE_ODDS_API_KEY environment variable."
         )
 
     try:
-        service = get_odds_service(ODDS_API_KEY)
+        service = get_odds_service(api_key)
         mapper = OddsMapper(db)
 
         # Find game by external ID
@@ -236,15 +242,13 @@ async def fetch_player_props_for_game(
         props_data = await service.get_event_player_props(game_id)
 
         # Map to prediction updates
-        updates = mapper.map_player_props_to_predictions(props_data, game)
+        updates = await mapper.map_player_props_to_predictions(props_data, game)
 
         updated = 0
         errors = []
 
-        # Bookmaker priority (highest first)
-        BOOKMAKER_PRIORITY = [
-        "FanDuel", "DraftKings", "BetRivers", "PointsBet", "Unibet"
-    ]
+        # Bookmaker priority (highest first) - FanDuel only
+        BOOKMAKER_PRIORITY = ["FanDuel"]
         for update_data in updates:
             try:
                 prediction = db.query(Prediction).filter(
@@ -341,14 +345,15 @@ async def update_prediction_odds(
     Fetches player props odds for games in the next N days and updates
     existing predictions with over/under pricing.
     """
-    if not ODDS_API_KEY:
+    api_key = get_odds_api_key()
+    if not api_key:
         raise HTTPException(
             status_code=500,
             detail="The Odds API key not configured. Set THE_ODDS_API_KEY environment variable."
         )
 
     try:
-        service = get_odds_service(ODDS_API_KEY)
+        service = get_odds_service(api_key)
         mapper = OddsMapper(db)
 
         # Get upcoming games with predictions
@@ -367,16 +372,14 @@ async def update_prediction_odds(
         games_processed = 0
         errors = []
 
-        # Bookmaker priority (highest first)
-        BOOKMAKER_PRIORITY = [
-        "FanDuel", "DraftKings", "BetRivers", "PointsBet", "Unibet"
-    ]
+        # Bookmaker priority (highest first) - FanDuel only
+        BOOKMAKER_PRIORITY = ["FanDuel"]
         try:
                 for game in games:
                     props_data = await service.get_event_player_props(game.external_id)
 
                     # Map to prediction updates
-                    updates = mapper.map_player_props_to_predictions(props_data, game)
+                    updates = await mapper.map_player_props_to_predictions(props_data, game)
 
                     for update_data in updates:
                         prediction = db.query(Prediction).filter(

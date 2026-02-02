@@ -20,13 +20,19 @@ import asyncio
 import logging
 import os
 import uuid
-from datetime import datetime, timedelta, timezone, UTC
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional
+
+# UTC timezone for Python < 3.11 compatibility
+try:
+    from datetime import UTC
+except ImportError:
+    UTC = timezone.utc
 
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
 
-from app.models.nba.models import (
+from app.models import (
     HistoricalOddsSnapshot,
     Player,
     Game,

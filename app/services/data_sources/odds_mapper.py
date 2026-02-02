@@ -9,7 +9,8 @@ from datetime import datetime, timedelta
 from typing import List, Dict, Optional, Any
 from sqlalchemy.orm import Session
 
-from app.models.nba.models import Game, GameOdds, Player, Prediction
+from app.models import Game, GameOdds, Player, Prediction
+from app.services.sync.matchers.player_resolver import PlayerResolver
 
 logger = logging.getLogger(__name__)
 
@@ -202,35 +203,61 @@ class OddsMapper:
 
         return game_odds_list
 
-    def find_player_by_name_and_team(
+    async def find_player_by_name_and_team(
         self,
         player_name: str,
         team: str
     ) -> Optional[Player]:
         """
-        Find a player by name and team.
+        Find player using PlayerResolver's sophisticated pipeline.
+
+        Pipeline:
+        1. Exact lookup in player_aliases table
+        2. Normalized comparison (suffixes, punctuation, accents)
+        3. Fuzzy match (RapidFuzz WRatio, 85% threshold)
+        4. Team context validation
 
         Args:
-            player_name: Player full name
+            player_name: Player full name from odds API
             team: Team abbreviation
 
         Returns:
-            Player object if found, None otherwise
+            Player or None.
         """
-        # Try exact match first
+        resolver = PlayerResolver(self.db)
+
+        # Use PlayerResolver's 4-step pipeline
+        result = await resolver.resolve_player(
+            player_name=player_name,
+            source='odds_api',
+            context={'team_abbr': team}
+        )
+
+        if result:
+            player = self.db.query(Player).filter(
+                Player.nba_api_id == result['nba_player_id']
+            ).first()
+
+            if player:
+                logger.info(
+                    f"Resolved: {player_name} -> {player.name} "
+                    f"(method: {result['match_method']}, "
+                    f"confidence: {result['match_confidence']:.2f})"
+                )
+                return player
+
+        # Fallback to original logic if PlayerResolver fails
+        logger.warning(f"PlayerResolver failed for {player_name}, using fallback")
         player = self.db.query(Player).filter(
             Player.name == player_name,
             Player.team == team
         ).first()
 
-        if player:
-            return player
-
-        # Try partial match
-        player = self.db.query(Player).filter(
-            Player.name.ilike(f"%{player_name}%"),
-            Player.team == team
-        ).first()
+        if not player:
+            player = self.db.query(Player).filter(
+                Player.name.ilike(f"%{player_name}%"),
+                Player.team == team
+            ).first()
 
         return player
 
@@ -252,7 +279,7 @@ class OddsMapper:
         }
         return mapping.get(market_key, market_key.replace("player_", ""))
 
-    def map_player_props_to_predictions(
+    async def map_player_props_to_predictions(
         self,
         props_data: Dict,
         game: Game
@@ -327,10 +354,10 @@ class OddsMapper:
                         if not player_name or player_name == "None":
                             continue
 
-                        # Try to find player by exact name match
-                        player = self.find_player_by_name_and_team(player_name, game.home_team)
+                        # Use PlayerResolver to find player
+                        player = await self.find_player_by_name_and_team(player_name, game.home_team)
                         if not player:
-                            player = self.find_player_by_name_and_team(player_name, game.away_team)
+                            player = await self.find_player_by_name_and_team(player_name, game.away_team)
 
                         if not player:
                             logger.debug(f"    Player not found: {player_name}")

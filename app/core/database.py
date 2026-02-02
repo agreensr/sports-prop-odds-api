@@ -48,6 +48,6 @@ def get_db() -> Generator[Session, None, None]:
 
 def init_db():
     """Initialize database tables."""
-    from app.models.nba.models import Base
+    from app.models import Base
     # checkfirst=True will only create tables that don't exist
     Base.metadata.create_all(bind=engine, checkfirst=True)

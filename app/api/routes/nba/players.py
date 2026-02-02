@@ -1,6 +1,14 @@
 """
 Player search and lookup routes.
-Allows searching players by name and looking up by NBA.com ID.
+
+This module has been refactored to use the Repository Pattern for data access.
+All database queries are now abstracted through the PlayerRepository.
+
+Benefits:
+1. Separation of concerns - data access logic is in the repository
+2. Easier testing - can mock the repository
+3. Consistent interface for data operations
+4. Single place to maintain query logic
 """
 import logging
 from typing import List, Optional
@@ -8,10 +16,11 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import or_, func
 
-from app.models.nba.models import Player, Prediction
+from app.models import Player, Prediction
 from app.core.database import get_db
+from app.repositories.nba.player_repository import PlayerRepository
+from app.repositories.nba.prediction_repository import PredictionRepository
 
 logger = logging.getLogger(__name__)
 
@@ -54,24 +63,32 @@ async def search_players(
     Example: /api/players/search?name=curry&team=GSW
     Example: /api/players/search?name=james&position=SF
     """
-    query = db.query(Player)
+    player_repo = PlayerRepository(db)
 
-    # Case-insensitive name search
-    name_filter = f"%{name.lower()}%"
-    query = query.filter(
-        or_(
-            func.lower(Player.name).ilike(name_filter),
-            Player.external_id == name  # Also allow searching by NBA.com ID
-        )
-    )
+    # First try to find by external ID if it matches exactly
+    player_by_id = player_repo.find_by_external_id(name)
+    players = []
 
-    if team:
-        query = query.filter(Player.team == team.upper())
+    if player_by_id:
+        # Apply team/position filters to direct ID match
+        if team and player_by_id.team != team.upper():
+            players = []
+        elif position and player_by_id.position != position.upper():
+            players = []
+        else:
+            players = [player_by_id]
 
-    if position:
-        query = query.filter(Player.position == position.upper())
+    # If no ID match or filters didn't match, do name search
+    if not players:
+        players = player_repo.search_by_name(name, limit=limit)
 
-    players = query.order_by(Player.name).limit(limit).all()
+        # Apply team filter
+        if team:
+            players = [p for p in players if p.team == team.upper()]
+
+        # Apply position filter
+        if position:
+            players = [p for p in players if p.position == position.upper()]
 
     if not players:
         return {
@@ -94,7 +111,8 @@ async def get_player(player_id: str, db: Session = Depends(get_db)):
     """
     try:
         player_uuid = UUID(player_id)
-        player = db.query(Player).filter(Player.id == player_uuid).first()
+        player_repo = PlayerRepository(db)
+        player = player_repo.find_by_id(str(player_uuid))
     except ValueError:
         raise HTTPException(
             status_code=400,
@@ -117,7 +135,8 @@ async def get_player_by_nba_id(nba_id: str, db: Session = Depends(get_db)):
 
     Returns the player's database UUID, which can be used with other endpoints.
     """
-    player = db.query(Player).filter(Player.external_id == nba_id).first()
+    player_repo = PlayerRepository(db)
+    player = player_repo.find_by_external_id(nba_id)
 
     if not player:
         raise HTTPException(
@@ -140,7 +159,10 @@ async def get_player_predictions_by_nba_id(
     This is a convenience endpoint that combines player lookup and predictions.
     Example: /api/players/nba/2544/predictions?limit=5
     """
-    player = db.query(Player).filter(Player.external_id == nba_id).first()
+    player_repo = PlayerRepository(db)
+    prediction_repo = PredictionRepository(db)
+
+    player = player_repo.find_by_external_id(nba_id)
 
     if not player:
         raise HTTPException(
@@ -148,15 +170,9 @@ async def get_player_predictions_by_nba_id(
             detail=f"Player with NBA ID {nba_id} not found"
         )
 
-    predictions = (
-        db.query(Prediction)
-        .filter(Prediction.player_id == player.id)
-        .order_by(Prediction.created_at.desc())
-        .limit(limit)
-        .all()
-    )
+    predictions = prediction_repo.find_by_player(player.id, limit=limit)
 
-    from app.api.routes.predictions import prediction_to_dict
+    from app.api.routes.nba.predictions import prediction_to_dict
 
     return {
         "player": player_to_dict(player),
@@ -179,16 +195,27 @@ async def list_players(
     Example: /api/players?team=LAL&limit=20
     Example: /api/players?position=PG
     """
-    query = db.query(Player)
+    player_repo = PlayerRepository(db)
 
-    if team:
-        query = query.filter(Player.team == team.upper())
+    # Apply filters
+    if team and position:
+        players = player_repo.find_by_team_and_position(
+            team.upper(),
+            position.upper(),
+            active_only=True
+        )
+    elif team:
+        players = player_repo.find_by_team(team.upper(), active_only=True)
+    elif position:
+        players = player_repo.find_by_position(position.upper(), active_only=True)
+    else:
+        players = player_repo.find_active()
 
-    if position:
-        query = query.filter(Player.position == position.upper())
+    # Get total before pagination
+    total = len(players)
 
-    total = query.count()
-    players = query.order_by(Player.name).offset(offset).limit(limit).all()
+    # Apply pagination
+    players = players[offset:offset + limit]
 
     return {
         "players": [player_to_dict(p, include_stats=True) for p in players],
@@ -203,17 +230,12 @@ async def list_players(
 async def list_teams(db: Session = Depends(get_db)):
     """
     Get list of all teams in the database with player counts.
-    """
-    from sqlalchemy import func
 
-    teams = (
-        db.query(Player.team, func.count(Player.id).label("count"))
-        .filter(Player.team.isnot(None))
-        .group_by(Player.team)
-        .order_by(func.count(Player.id).desc())
-        .all()
-    )
+    Now using the repository's get_team_counts() method.
+    """
+    player_repo = PlayerRepository(db)
+    team_counts = player_repo.get_team_counts(active_only=True)
 
     return {
-        "teams": [{"team": t[0], "players_count": t[1]} for t in teams]
+        "teams": [{"team": t, "players_count": count} for t, count in team_counts]
     }
