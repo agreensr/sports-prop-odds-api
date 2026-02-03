@@ -91,8 +91,8 @@ def init_tracing(
         from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
         from opentelemetry import propagate
     except ImportError as e:
-        logger.error(f"OpenTelemetry packages not installed: {e}")
-        logger.error("Install with: pip install opentelemetry-api opentelemetry-sdk "
+        logger.warning(f"OpenTelemetry not available, tracing disabled: {e}")
+        logger.debug("Install with: pip install opentelemetry-api opentelemetry-sdk "
                      "opentelemetry-instrumentation-fastapi opentelemetry-instrumentation-sqlalchemy")
         return
 
