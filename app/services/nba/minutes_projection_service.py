@@ -143,9 +143,9 @@ class FoulTroubleAnalyzer:
             Dict with foul risk metrics
         """
         # Get recent games
-        recent_stats = db.query(PlayerStats).filter(
+        recent_stats = db.query(PlayerStats).join(Game, PlayerStats.game_id == Game.id).filter(
             PlayerStats.player_id == player_id
-        ).order_by(desc(PlayerStats.game_date)).limit(games_back).all()
+        ).order_by(desc(Game.game_date)).limit(games_back).all()
 
         if len(recent_stats) < 5:
             return {"risk_level": "unknown", "avg_fouls": None, "foul_out_rate": None}
@@ -222,7 +222,7 @@ class CoachRotationAnalyzer:
 
         for game in games:
             # Get final score from boxscore (simplified)
-            stats = db.query(PlayerStats).filter(
+            stats = db.query(PlayerStats).join(Game, PlayerStats.game_id == Game.id).filter(
                 PlayerStats.game_id == game.id
             ).all()
 

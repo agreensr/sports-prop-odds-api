@@ -11,7 +11,7 @@ from typing import List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks, Request
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from slowapi import Limiter
 
 from app.models import Player, Game, Prediction, Base
@@ -124,8 +124,10 @@ async def get_player_predictions(
             detail=f"Player {player_id} not found. Use /api/predictions/player/nba/{{nba_id}} for NBA.com ID lookup"
         )
 
+    # OPTIMIZED: Eager load player and game to avoid N+1 queries
     predictions = (
         db.query(Prediction)
+        .options(joinedload(Prediction.player), joinedload(Prediction.game))
         .filter(Prediction.player_id == player.id)
         .order_by(Prediction.created_at.desc())
         .limit(limit)
@@ -175,8 +177,10 @@ async def get_player_predictions_by_nba_id(
                    f"Use /api/players/search to find players."
         )
 
+    # OPTIMIZED: Eager load player and game to avoid N+1 queries
     predictions = (
         db.query(Prediction)
+        .options(joinedload(Prediction.player), joinedload(Prediction.game))
         .filter(Prediction.player_id == player.id)
         .order_by(Prediction.created_at.desc())
         .limit(limit)
@@ -224,8 +228,10 @@ async def get_game_predictions(
     if not game:
         raise HTTPException(status_code=404, detail=f"Game {game_id} not found")
 
+    # OPTIMIZED: Eager load player and game to avoid N+1 queries
     predictions = (
         db.query(Prediction)
+        .options(joinedload(Prediction.player), joinedload(Prediction.game))
         .filter(Prediction.game_id == game.id)
         .order_by(Prediction.confidence.desc())
         .all()
@@ -269,8 +275,10 @@ async def get_game_predictions_by_nba_id(
             detail=f"Game with NBA ID {nba_game_id} not found in database"
         )
 
+    # OPTIMIZED: Eager load player and game to avoid N+1 queries
     predictions = (
         db.query(Prediction)
+        .options(joinedload(Prediction.player), joinedload(Prediction.game))
         .filter(Prediction.game_id == game.id)
         .order_by(Prediction.confidence.desc())
         .all()
@@ -386,8 +394,10 @@ async def get_predictions_by_team_names(
                    f"Check team abbreviations or try /api/games to see upcoming games."
         )
 
+    # OPTIMIZED: Eager load player and game to avoid N+1 queries
     predictions = (
         db.query(Prediction)
+        .options(joinedload(Prediction.player), joinedload(Prediction.game))
         .filter(Prediction.game_id == game.id)
         .order_by(Prediction.confidence.desc())
         .all()
@@ -462,8 +472,10 @@ async def get_top_predictions(
     start_date_utc = start_date_utc.replace(tzinfo=timezone.utc)
     end_date_utc = end_date_utc.replace(tzinfo=timezone.utc)
 
+    # OPTIMIZED: Eager load player and game to avoid N+1 queries
     query = (
         db.query(Prediction)
+        .options(joinedload(Prediction.player), joinedload(Prediction.game))
         .join(Game)
         .filter(
             Prediction.confidence >= min_confidence,
@@ -511,8 +523,10 @@ async def get_recent_predictions(
     check_request_limit(limiter, request, "10/minute")  # Rate limit check (no-op, use decorators instead)
     cutoff_time = datetime.utcnow() - timedelta(hours=hours)
 
+    # OPTIMIZED: Eager load player and game to avoid N+1 queries
     predictions = (
         db.query(Prediction)
+        .options(joinedload(Prediction.player), joinedload(Prediction.game))
         .filter(Prediction.created_at >= cutoff_time)
         .order_by(Prediction.created_at.desc())
         .limit(limit)
@@ -833,4 +847,298 @@ async def generate_enhanced_predictions(
         "stat_types": stat_type_list,
         "odds_source": odds_source,
         "errors": errors
+    }
+
+
+# ============================================================================
+# ENSEMBLE PREDICTIONS WITH ML, CALIBRATION & DYNAMIC WEIGHTING
+# ============================================================================
+
+
+# ============================================================================
+# ENSEMBLE PREDICTIONS WITH ML, CALIBRATION & DYNAMIC WEIGHTING  
+# ============================================================================
+
+@router.get("/ensemble/player/{player_id}")
+async def get_ensemble_prediction_for_player(
+    request: Request,
+    player_id: str,
+    game_id: str,
+    stat_type: str = Query("points", description="Stat type to predict"),
+    db: Session = Depends(get_db)
+):
+    from app.services.nba.ensemble_prediction_service import create_ensemble_service
+    from app.services.nba.calibration_service import CalibrationService
+    
+    player = db.query(Player).filter(Player.id == player_id).first()
+    if not player:
+        player = db.query(Player).filter(Player.external_id == player_id).first()
+        if not player:
+            raise HTTPException(status_code=404, detail=f"Player {player_id} not found")
+    
+    game = db.query(Game).filter(Game.id == game_id).first()
+    if not game:
+        raise HTTPException(status_code=404, detail=f"Game {game_id} not found")
+    
+    ensemble = create_ensemble_service(db)
+    calibration = CalibrationService(db)
+    player_tier = calibration.get_player_tier(player_id)
+    
+    result = ensemble.predict(player_id, game_id, stat_type)
+    
+    result["player"] = {
+        "id": str(player.id),
+        "external_id": player.external_id,
+        "name": player.name,
+        "team": player.team,
+        "position": player.position
+    }
+    
+    result["game"] = {
+        "id": str(game.id),
+        "external_id": game.external_id,
+        "date_utc": game.game_date.isoformat(),
+        "away_team": game.away_team,
+        "home_team": game.home_team,
+        "status": game.status
+    }
+    
+    result["player_tier"] = player_tier
+    result["model_version"] = "ensemble-v1.0"
+    
+    return result
+
+
+@router.get("/ensemble/game/{game_id}")
+async def get_ensemble_predictions_for_game(
+    request: Request,
+    game_id: str,
+    stat_types: str = Query("points,rebounds,assists,threes"),
+    min_confidence: float = Query(0.50, ge=0.0, le=1.0),
+    db: Session = Depends(get_db)
+):
+    from app.services.nba.ensemble_prediction_service import create_ensemble_service
+    from app.services.nba.calibration_service import CalibrationService, PLAYER_TIERS
+    from sqlalchemy import or_
+    
+    game = db.query(Game).filter(Game.id == game_id).first()
+    if not game:
+        try:
+            game_uuid = UUID(game_id)
+            game = db.query(Game).filter(Game.id == str(game_uuid)).first()
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"Invalid game ID: {game_id}")
+    
+    if not game:
+        raise HTTPException(status_code=404, detail=f"Game {game_id} not found")
+    
+    stat_type_list = [s.strip().lower() for s in stat_types.split(",") if s.strip()]
+    
+    players = (
+        db.query(Player)
+        .filter(
+            or_(
+                Player.team == game.away_team,
+                Player.team == game.home_team
+            ),
+            Player.active == True
+        )
+        .all()
+    )
+    
+    if not players:
+        return {
+            "game": {
+                "id": str(game.id),
+                "external_id": game.external_id,
+                "away_team": game.away_team,
+                "home_team": game.home_team
+            },
+            "predictions": [],
+            "count": 0
+        }
+    
+    ensemble = create_ensemble_service(db)
+    calibration = CalibrationService(db)
+    
+    all_predictions = []
+    
+    for player in players:
+        for stat_type in stat_type_list:
+            try:
+                result = ensemble.predict(str(player.id), str(game.id), stat_type)
+                
+                if result["confidence"] >= min_confidence:
+                    result["player"] = {
+                        "id": str(player.id),
+                        "external_id": player.external_id,
+                        "name": player.name,
+                        "team": player.team,
+                        "position": player.position
+                    }
+                    
+                    player_tier = calibration.get_player_tier(str(player.id))
+                    result["player_tier"] = player_tier
+                    result["tier_description"] = PLAYER_TIERS[player_tier]["description"]
+                    result["game_id"] = str(game.id)
+                    result["stat_type"] = stat_type
+                    
+                    all_predictions.append(result)
+                    
+            except Exception as e:
+                logger.debug(f"Error: {e}")
+                continue
+    
+    all_predictions.sort(key=lambda x: x["confidence"], reverse=True)
+    
+    return {
+        "game": {
+            "id": str(game.id),
+            "external_id": game.external_id,
+            "date_utc": game.game_date.isoformat(),
+            "away_team": game.away_team,
+            "home_team": game.home_team,
+            "status": game.status
+        },
+        "filters": {
+            "stat_types": stat_type_list,
+            "min_confidence": min_confidence
+        },
+        "predictions": all_predictions,
+        "count": len(all_predictions),
+        "model_version": "ensemble-v1.0"
+    }
+
+
+@router.get("/ensemble/top")
+async def get_top_ensemble_predictions(
+    request: Request,
+    min_confidence: float = Query(0.60, ge=0.0, le=1.0),
+    stat_type: Optional[str] = Query(None),
+    days_ahead: int = Query(1, ge=0, le=7),
+    limit: int = Query(25, ge=1, le=100),
+    db: Session = Depends(get_db)
+):
+    from app.services.nba.ensemble_prediction_service import create_ensemble_service
+    from app.services.nba.calibration_service import CalibrationService, PLAYER_TIERS
+    from datetime import timezone, timedelta
+    from sqlalchemy import or_
+    
+    now_utc = datetime.now(timezone.utc)
+    end_date_utc = now_utc + timedelta(days=days_ahead)
+    
+    upcoming_games = (
+        db.query(Game)
+        .filter(
+            Game.game_date >= now_utc,
+            Game.game_date <= end_date_utc,
+            Game.status == "scheduled"
+        )
+        .all()
+    )
+    
+    if not upcoming_games:
+        return {
+            "filters": {
+                "min_confidence": min_confidence,
+                "stat_type": stat_type,
+                "days_ahead": days_ahead
+            },
+            "predictions": [],
+            "count": 0
+        }
+    
+    ensemble = create_ensemble_service(db)
+    calibration = CalibrationService(db)
+    
+    stat_types = [stat_type] if stat_type else ["points", "rebounds", "assists", "threes"]
+    
+    all_predictions = []
+    
+    for game in upcoming_games:
+        players = (
+            db.query(Player)
+            .filter(
+                or_(
+                    Player.team == game.away_team,
+                    Player.team == game.home_team
+                ),
+                Player.active == True
+            )
+            .all()
+        )
+        
+        for player in players:
+            for stat in stat_types:
+                try:
+                    result = ensemble.predict(str(player.id), str(game.id), stat)
+                    
+                    if result["confidence"] >= min_confidence:
+                        result["player"] = {
+                            "id": str(player.id),
+                            "external_id": player.external_id,
+                            "name": player.name,
+                            "team": player.team,
+                            "position": player.position
+                        }
+                        
+                        eastern_time = utc_to_eastern(game.game_date)
+                        result["game"] = {
+                            "id": str(game.id),
+                            "external_id": game.external_id,
+                            "date_utc": game.game_date.isoformat(),
+                            "date_display": format_game_time_eastern(game.game_date),
+                            "away_team": game.away_team,
+                            "home_team": game.home_team
+                        }
+                        
+                        player_tier = calibration.get_player_tier(str(player.id))
+                        result["player_tier"] = player_tier
+                        result["tier_description"] = PLAYER_TIERS[player_tier]["description"]
+                        
+                        all_predictions.append(result)
+                        
+                except Exception as e:
+                    logger.debug(f"Error: {e}")
+                    continue
+    
+    all_predictions.sort(key=lambda x: x["confidence"], reverse=True)
+    top_predictions = all_predictions[:limit]
+    
+    return {
+        "filters": {
+            "min_confidence": min_confidence,
+            "stat_type": stat_type,
+            "days_ahead": days_ahead
+        },
+        "predictions": top_predictions,
+        "count": len(top_predictions),
+        "model_version": "ensemble-v1.0"
+    }
+
+
+@router.get("/ensemble/info")
+async def get_ensemble_info(request: Request, db: Session = Depends(get_db)):
+    from app.services.nba.ensemble_prediction_service import create_ensemble_service
+    from app.services.nba.calibration_service import CalibrationService, PLAYER_TIERS, STAT_CALIBRATION
+    from app.services.nba.xgboost_prediction_service import FEATURE_COLUMNS
+    
+    ensemble = create_ensemble_service(db)
+    calibration = CalibrationService(db)
+    
+    return {
+        "ensemble": ensemble.get_ensemble_info(),
+        "player_tiers": {
+            tier: {
+                "min_pts_per_36": config["min_pts_per_36"],
+                "calibration": config["calibration_multiplier"],
+                "confidence_boost": config["confidence_boost"],
+                "description": config["description"]
+            }
+            for tier, config in PLAYER_TIERS.items()
+        },
+        "stat_calibration": STAT_CALIBRATION,
+        "xgboost_features": FEATURE_COLUMNS,
+        "calibration_target": "<5% ECE",
+        "research_basis": "Walsh and Joshi (2024): Calibration-based ROI +34.69% vs accuracy-based -35.17%"
     }
