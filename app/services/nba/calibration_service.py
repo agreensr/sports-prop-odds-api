@@ -35,15 +35,11 @@ PLAYER_TIERS = {
         'confidence_boost': 0.05,
         'description': 'Star players - efficiency is reliable'
     },
-    'above_avg': {  # 18-25 pts/36 - All-Star level
-        'min_pts_per_36': 18.0,
-        'calibration_multiplier': 0.98,
+    'above_avg': {'calibration_multiplier': 1.078,
         'confidence_boost': 0.02,
         'description': 'Above average players'
     },
-    'average': {    # 12-18 pts/36 - solid rotation players
-        'min_pts_per_36': 12.0,
-        'calibration_multiplier': 0.95,
+    'average': {'calibration_multiplier': 0.855,
         'confidence_boost': 0.0,
         'description': 'Average NBA players'
     },
